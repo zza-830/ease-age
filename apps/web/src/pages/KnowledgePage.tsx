@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BookOpen,
   Search,
@@ -11,6 +11,7 @@ import {
   Eye,
   ChevronRight
 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface Article {
   id: string;
@@ -34,21 +35,107 @@ const mockArticles: Article[] = [
   { id: '6', title: '关节炎的预防与护理', summary: '关节保护、运动建议...', category: '疾病预防', author: '陈医生', date: '2026-05-31', readTime: '6分钟', views: 789, isBookmarked: false, coverImage: '🦴' },
 ];
 
-const categories = [
-  { name: '全部', icon: BookOpen, count: 156 },
-  { name: '健康养生', icon: Heart, count: 45 },
-  { name: '疾病预防', icon: Apple, count: 38 },
-  { name: '心理关怀', icon: Brain, count: 28 },
-  { name: '生活常识', icon: Moon, count: 45 },
-];
+const getCategoryEmoji = (category?: string) => {
+  const emojiMap: Record<string, string> = {
+    '健康养生': '🥗',
+    '疾病预防': '💉',
+    '心理关怀': '🧠',
+    '生活常识': '😴',
+    '运动健身': '🏃',
+    '营养饮食': '🍎',
+  };
+  return emojiMap[category || ''] || '📚';
+};
+
+const iconMap: Record<string, any> = {
+  '全部': BookOpen,
+  '健康养生': Heart,
+  '疾病预防': Apple,
+  '心理关怀': Brain,
+  '生活常识': Moon,
+};
+
+interface CategoryInfo {
+  id?: string;
+  name: string;
+  icon: any;
+  count: number;
+}
 
 export default function KnowledgePage() {
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [categories, setCategories] = useState<CategoryInfo[]>([
+    { name: '全部', icon: BookOpen, count: 156 },
+    { name: '健康养生', icon: Heart, count: 45 },
+    { name: '疾病预防', icon: Apple, count: 38 },
+    { name: '心理关怀', icon: Brain, count: 28 },
+    { name: '生活常识', icon: Moon, count: 45 },
+  ]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredArticles = mockArticles.filter(article => {
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    fetchArticles();
+  }, [selectedCategory, searchQuery]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get<{ data: any[] }>('/knowledge/categories');
+      const categoryList: CategoryInfo[] = [
+        { name: '全部', icon: BookOpen, count: 0 },
+        ...response.data.map(cat => ({
+          id: cat.id,
+          name: cat.categoryName,
+          icon: iconMap[cat.categoryName] || BookOpen,
+          count: cat.articleCount || 0,
+        })),
+      ];
+      setCategories(categoryList);
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const fetchArticles = async () => {
+    try {
+      setIsLoading(true);
+      const params = new URLSearchParams();
+      if (selectedCategory !== '全部') {
+        const cat = categories.find(c => c.name === selectedCategory);
+        if (cat?.id) params.append('categoryId', cat.id);
+      }
+      if (searchQuery) params.append('search', searchQuery);
+
+      const response = await api.get<{ data: { items: any[] } }>(`/knowledge/articles?${params}`);
+      const formattedArticles = response.data.items.map(item => ({
+        id: item.id,
+        title: item.title,
+        summary: item.summaryText || '',
+        category: item.category?.categoryName || '其他',
+        author: item.authorName || '匿名',
+        date: new Date(item.publishedAt || item.createdAt).toLocaleDateString('zh-CN'),
+        readTime: '5分钟',
+        views: item.viewCount,
+        isBookmarked: false,
+        coverImage: getCategoryEmoji(item.category?.categoryName),
+      }));
+      setArticles(formattedArticles);
+    } catch (error) {
+      console.error('Failed to fetch articles:', error);
+      setArticles(mockArticles);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredArticles = articles.filter(article => {
     const matchesCategory = selectedCategory === '全部' || article.category === selectedCategory;
-    const matchesSearch = article.title.includes(searchQuery) || article.summary.includes(searchQuery);
+    const matchesSearch = !searchQuery || article.title.includes(searchQuery) || article.summary.includes(searchQuery);
     return matchesCategory && matchesSearch;
   });
 
@@ -96,44 +183,60 @@ export default function KnowledgePage() {
 
         {/* Articles Grid */}
         <div className="flex-1">
-          <div className="grid gap-6 md:grid-cols-2">
-            {filteredArticles.map((article) => (
-              <div key={article.id} className="rounded-xl border bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="aspect-[2/1] bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
-                  <span className="text-6xl">{article.coverImage}</span>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">
-                      {article.category}
-                    </span>
-                    <button className={`p-1 ${article.isBookmarked ? 'text-orange-500' : 'text-stone-400'}`}>
-                      <Bookmark className={`h-4 w-4 ${article.isBookmarked ? 'fill-orange-500' : ''}`} />
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+            </div>
+          )}
+
+          {!isLoading && (
+            <div className="grid gap-6 md:grid-cols-2">
+              {filteredArticles.map((article) => (
+                <div key={article.id} className="rounded-xl border bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="aspect-[2/1] bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+                    <span className="text-6xl">{article.coverImage}</span>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">
+                        {article.category}
+                      </span>
+                      <button className={`p-1 ${article.isBookmarked ? 'text-orange-500' : 'text-stone-400'}`}>
+                        <Bookmark className={`h-4 w-4 ${article.isBookmarked ? 'fill-orange-500' : ''}`} />
+                      </button>
+                    </div>
+                    <h3 className="mt-2 font-semibold text-stone-900 line-clamp-2">{article.title}</h3>
+                    <p className="mt-1 text-sm text-stone-500 line-clamp-2">{article.summary}</p>
+                    <div className="mt-4 flex items-center justify-between text-xs text-stone-500">
+                      <div className="flex items-center space-x-4">
+                        <span className="flex items-center">
+                          <Clock className="mr-1 h-3 w-3" />
+                          {article.readTime}
+                        </span>
+                        <span className="flex items-center">
+                          <Eye className="mr-1 h-3 w-3" />
+                          {article.views}
+                        </span>
+                      </div>
+                      <span>{article.date}</span>
+                    </div>
+                    <button className="mt-4 w-full flex items-center justify-center rounded-lg border py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
+                      阅读全文
+                      <ChevronRight className="ml-1 h-4 w-4" />
                     </button>
                   </div>
-                  <h3 className="mt-2 font-semibold text-stone-900 line-clamp-2">{article.title}</h3>
-                  <p className="mt-1 text-sm text-stone-500 line-clamp-2">{article.summary}</p>
-                  <div className="mt-4 flex items-center justify-between text-xs text-stone-500">
-                    <div className="flex items-center space-x-4">
-                      <span className="flex items-center">
-                        <Clock className="mr-1 h-3 w-3" />
-                        {article.readTime}
-                      </span>
-                      <span className="flex items-center">
-                        <Eye className="mr-1 h-3 w-3" />
-                        {article.views}
-                      </span>
-                    </div>
-                    <span>{article.date}</span>
-                  </div>
-                  <button className="mt-4 w-full flex items-center justify-center rounded-lg border py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
-                    阅读全文
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && filteredArticles.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-stone-500">未找到匹配的文章</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

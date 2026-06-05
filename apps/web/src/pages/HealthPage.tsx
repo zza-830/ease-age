@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Heart,
   Activity,
@@ -10,6 +10,8 @@ import {
   TrendingDown,
   Clock
 } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 interface HealthMetric {
   type: string;
@@ -57,7 +59,66 @@ const statusLabels = {
 };
 
 export default function HealthPage() {
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'metrics' | 'medications' | 'checkups' | 'reports'>('metrics');
+  const [healthRecords, setHealthRecords] = useState<HealthMetric[]>([]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchHealthData();
+    } else {
+      // No user, use mock data
+      setHealthRecords(mockMetrics);
+      setMedications(mockMedications);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const fetchHealthData = async () => {
+    try {
+      setIsLoading(true);
+      // Get elderly profile first
+      const profileResponse = await api.get<{ data: any }>(`/users/${user?.id}/elderly-profile`);
+      const elderlyProfileId = profileResponse.data?.id;
+
+      if (elderlyProfileId) {
+        // Fetch health records
+        const recordsResponse = await api.get<{ data: { items: any[] } }>(`/health/records/${elderlyProfileId}`);
+        const formattedRecords: HealthMetric[] = recordsResponse.data.items.map((item: any) => ({
+          type: item.metricType || item.type,
+          value: item.value,
+          unit: item.unit,
+          status: item.status || 'normal',
+          trend: item.trend || 'stable',
+          lastUpdated: new Date(item.recordedAt || item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        }));
+        setHealthRecords(formattedRecords.length > 0 ? formattedRecords : mockMetrics);
+
+        // Fetch medications
+        const medsResponse = await api.get<{ data: any[] }>(`/health/medications/${elderlyProfileId}`);
+        const formattedMeds: Medication[] = medsResponse.data.map((item: any) => ({
+          id: item.id,
+          name: item.medicationName || item.name,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          nextDose: item.nextDoseTime || '08:00',
+          isActive: item.isActive !== false,
+        }));
+        setMedications(formattedMeds.length > 0 ? formattedMeds : mockMedications);
+      } else {
+        setHealthRecords(mockMetrics);
+        setMedications(mockMedications);
+      }
+    } catch (error) {
+      console.error('Failed to fetch health data:', error);
+      setHealthRecords(mockMetrics);
+      setMedications(mockMedications);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -112,10 +173,17 @@ export default function HealthPage() {
         </nav>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+        </div>
+      )}
+
       {/* Tab Content */}
-      {activeTab === 'metrics' && (
+      {!isLoading && activeTab === 'metrics' && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {mockMetrics.map((metric, index) => (
+          {healthRecords.map((metric, index) => (
             <div key={index} className="rounded-xl border bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
@@ -143,9 +211,9 @@ export default function HealthPage() {
         </div>
       )}
 
-      {activeTab === 'medications' && (
+      {!isLoading && activeTab === 'medications' && (
         <div className="space-y-4">
-          {mockMedications.map((medication) => (
+          {medications.map((medication) => (
             <div key={medication.id} className="rounded-xl border bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -170,7 +238,7 @@ export default function HealthPage() {
         </div>
       )}
 
-      {activeTab === 'checkups' && (
+      {!isLoading && activeTab === 'checkups' && (
         <div className="space-y-4">
           {[
             { date: '2026-06-01', hospital: '社区卫生中心', type: '常规体检', status: '已完成' },
@@ -200,7 +268,7 @@ export default function HealthPage() {
         </div>
       )}
 
-      {activeTab === 'reports' && (
+      {!isLoading && activeTab === 'reports' && (
         <div className="space-y-4">
           {[
             { date: '2026-06', title: '月度健康报告', summary: '整体健康状况良好，血压血糖控制稳定' },
