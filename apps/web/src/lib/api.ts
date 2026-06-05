@@ -21,8 +21,22 @@ class ApiClient {
       'Content-Type': 'application/json',
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Get token from store if not provided
+    let authToken = token;
+    if (!authToken) {
+      try {
+        const authData = localStorage.getItem('easeage-auth');
+        if (authData) {
+          const parsed = JSON.parse(authData);
+          authToken = parsed?.state?.accessToken;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
