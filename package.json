@@ -1,0 +1,24 @@
+{
+  "name": "ease-age",
+  "private": true,
+  "version": "0.1.0",
+  "description": "EaseAge - Elderly Care Platform",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:migrate": "cd apps/server && pnpm prisma migrate dev",
+    "db:seed": "cd apps/server && pnpm prisma db seed",
+    "db:studio": "cd apps/server && pnpm prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.2.0",
+    "eslint": "^8.56.0"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=18"
+  }
+}
