@@ -32,6 +32,8 @@ coverage/
 
 # Prisma
 apps/server/prisma/migrations/
+*.db
+*.db-journal
 
 # Misc
 .superpowers/

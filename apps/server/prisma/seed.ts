@@ -54,6 +54,24 @@ async function main() {
         priceUnit: '次',
       },
     }),
+    prisma.service.create({
+      data: {
+        categoryId: categories[3].id,
+        serviceName: '家电维修',
+        descriptionText: '各类家电维修保养，空调、洗衣机、电视等',
+        basePrice: 50,
+        priceUnit: '次',
+      },
+    }),
+    prisma.service.create({
+      data: {
+        categoryId: categories[4].id,
+        serviceName: '健康咨询',
+        descriptionText: '专业医生在线健康咨询，解答健康疑问',
+        basePrice: 30,
+        priceUnit: '次',
+      },
+    }),
   ]);
 
   // Create knowledge categories
@@ -78,7 +96,7 @@ async function main() {
       data: {
         categoryId: knowledgeCategories[0].id,
         title: '老年人高血压饮食指南',
-        contentMarkdown: '# 高血压饮食指南\n\n## 低盐饮食\n\n每日食盐摄入量应控制在6克以下...',
+        contentMarkdown: '# 高血压饮食指南\n\n## 低盐饮食\n\n每日食盐摄入量应控制在6克以下，减少腌制食品的摄入。\n\n## 多吃蔬果\n\n新鲜蔬菜和水果富含钾、镁等矿物质，有助于控制血压。\n\n## 适量蛋白质\n\n选择优质蛋白质，如鱼类、豆制品、瘦肉等。',
         summaryText: '了解如何通过饮食控制血压，保持健康',
         authorName: '张医生',
         isPublished: true,
@@ -89,7 +107,7 @@ async function main() {
       data: {
         categoryId: knowledgeCategories[0].id,
         title: '夏季老年人养生要点',
-        contentMarkdown: '# 夏季养生\n\n## 防暑降温\n\n1. 避免中午外出\n2. 多喝水\n3. 穿着透气衣物...',
+        contentMarkdown: '# 夏季养生\n\n## 防暑降温\n\n1. 避免中午11点-15点外出\n2. 多喝水，少量多次\n3. 穿着透气、浅色衣物\n\n## 饮食调理\n\n- 多吃清淡、易消化食物\n- 适当食用绿豆汤、西瓜等消暑食品\n- 避免过多冷饮',
         summaryText: '夏季防暑降温、饮食调理建议',
         authorName: '赵营养师',
         isPublished: true,
@@ -100,9 +118,31 @@ async function main() {
       data: {
         categoryId: knowledgeCategories[1].id,
         title: '糖尿病患者的日常管理',
-        contentMarkdown: '# 糖尿病管理\n\n## 血糖监测\n\n建议每日监测血糖2-3次...',
+        contentMarkdown: '# 糖尿病管理\n\n## 血糖监测\n\n建议每日监测血糖2-3次，记录数据供医生参考。\n\n## 饮食控制\n\n- 控制总热量摄入\n- 定时定量进餐\n- 减少高糖食物\n\n## 适量运动\n\n每天坚持30分钟中等强度运动，如散步、太极拳等。',
         summaryText: '血糖监测、饮食控制和运动建议',
         authorName: '李医生',
+        isPublished: true,
+        publishedAt: new Date(),
+      },
+    }),
+    prisma.knowledgeArticle.create({
+      data: {
+        categoryId: knowledgeCategories[2].id,
+        title: '老年人心理健康指南',
+        contentMarkdown: '# 心理健康\n\n## 保持社交\n\n多与家人、朋友交流，参加社区活动。\n\n## 培养兴趣\n\n发展书法、绘画、园艺等兴趣爱好。\n\n## 规律作息\n\n保持规律的生活节奏，充足睡眠。',
+        summaryText: '如何保持积极心态，预防抑郁',
+        authorName: '王心理师',
+        isPublished: true,
+        publishedAt: new Date(),
+      },
+    }),
+    prisma.knowledgeArticle.create({
+      data: {
+        categoryId: knowledgeCategories[3].id,
+        title: '老年人睡眠改善方法',
+        contentMarkdown: '# 睡眠改善\n\n## 良好习惯\n\n1. 固定作息时间\n2. 睡前避免使用电子设备\n3. 保持卧室安静、舒适\n\n## 饮食注意\n\n- 睡前2小时不进食\n- 避免咖啡、浓茶\n- 可适量饮用温牛奶',
+        summaryText: '失眠原因分析及改善建议',
+        authorName: '刘医生',
         isPublished: true,
         publishedAt: new Date(),
       },
@@ -130,6 +170,15 @@ async function main() {
     },
   });
 
+  const staffUser = await prisma.user.create({
+    data: {
+      phoneNumber: '13800000003',
+      password: passwordHash,
+      fullName: '王护工',
+      role: 'staff',
+    },
+  });
+
   // Create elderly profile
   const elderlyProfile = await prisma.elderlyProfile.create({
     data: {
@@ -154,32 +203,51 @@ async function main() {
   });
 
   // Create health records
+  const now = new Date();
   await Promise.all([
     prisma.healthRecord.create({
       data: {
         elderlyProfileId: elderlyProfile.id,
         recordType: 'blood_pressure',
-        measurementValueJson: { systolic: 128, diastolic: 82 },
+        measurementValueJson: JSON.stringify({ systolic: 128, diastolic: 82 }),
         measurementUnit: 'mmHg',
-        measuredAt: new Date(),
+        measuredAt: now,
       },
     }),
     prisma.healthRecord.create({
       data: {
         elderlyProfileId: elderlyProfile.id,
         recordType: 'heart_rate',
-        measurementValueJson: { value: 72 },
+        measurementValueJson: JSON.stringify({ value: 72 }),
         measurementUnit: 'bpm',
-        measuredAt: new Date(),
+        measuredAt: now,
       },
     }),
     prisma.healthRecord.create({
       data: {
         elderlyProfileId: elderlyProfile.id,
         recordType: 'blood_sugar',
-        measurementValueJson: { value: 6.2 },
+        measurementValueJson: JSON.stringify({ value: 6.2 }),
         measurementUnit: 'mmol/L',
-        measuredAt: new Date(),
+        measuredAt: now,
+      },
+    }),
+    prisma.healthRecord.create({
+      data: {
+        elderlyProfileId: elderlyProfile.id,
+        recordType: 'body_temperature',
+        measurementValueJson: JSON.stringify({ value: 36.5 }),
+        measurementUnit: '°C',
+        measuredAt: new Date(now.getTime() - 3600000),
+      },
+    }),
+    prisma.healthRecord.create({
+      data: {
+        elderlyProfileId: elderlyProfile.id,
+        recordType: 'blood_oxygen',
+        measurementValueJson: JSON.stringify({ value: 98 }),
+        measurementUnit: '%',
+        measuredAt: now,
       },
     }),
   ]);
@@ -192,7 +260,7 @@ async function main() {
         medicationName: '降压药',
         dosageDescription: '1片',
         frequencyDescription: '每日一次',
-        reminderScheduleJson: ['08:00'],
+        reminderScheduleJson: JSON.stringify(['08:00']),
       },
     }),
     prisma.medication.create({
@@ -201,7 +269,16 @@ async function main() {
         medicationName: '降糖药',
         dosageDescription: '1片',
         frequencyDescription: '每日两次',
-        reminderScheduleJson: ['08:00', '20:00'],
+        reminderScheduleJson: JSON.stringify(['08:00', '20:00']),
+      },
+    }),
+    prisma.medication.create({
+      data: {
+        elderlyProfileId: elderlyProfile.id,
+        medicationName: '钙片',
+        dosageDescription: '2片',
+        frequencyDescription: '每日一次',
+        reminderScheduleJson: JSON.stringify(['20:00']),
       },
     }),
   ]);
@@ -210,6 +287,7 @@ async function main() {
   console.log('\n📱 Demo accounts:');
   console.log('   老人: 13800000001 / 123456');
   console.log('   家属: 13800000002 / 123456');
+  console.log('   护工: 13800000003 / 123456');
 }
 
 main()

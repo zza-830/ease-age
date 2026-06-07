@@ -3,7 +3,7 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'easeage-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
 const JWT_REFRESH_EXPIRES_IN = '30d' as SignOptions['expiresIn'];
 

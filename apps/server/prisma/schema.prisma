@@ -3,198 +3,188 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
   id          String   @id @default(cuid())
-  phoneNumber String   @unique @map("phone_number")
+  phoneNumber String   @unique
   password    String
-  fullName    String   @map("full_name")
+  fullName    String
   role        String   // elderly | family | staff | admin
-  avatarUrl   String?  @map("avatar_url")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  avatarUrl   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  elderlyProfile          ElderlyProfile?
-  familyRelations         FamilyRelation[]
-  conversationsAsMember   ConversationMember[]
-  sentMessages            Message[]             @relation("SentMessages")
-  callerCalls             VideoCallRecord[]     @relation("CallerCalls")
-  calleeCalls             VideoCallRecord[]     @relation("CalleeCalls")
-  serviceOrders           ServiceOrder[]
-  familyMemories          FamilyMemory[]        @relation("FamilyMemories")
-
-  @@map("users")
+  elderlyProfile        ElderlyProfile?
+  familyRelations       FamilyRelation[]
+  conversationsAsMember ConversationMember[]
+  sentMessages          Message[]         @relation("SentMessages")
+  callerCalls           VideoCallRecord[] @relation("CallerCalls")
+  calleeCalls           VideoCallRecord[] @relation("CalleeCalls")
+  serviceOrders         ServiceOrder[]
+  familyMemories        FamilyMemory[]    @relation("FamilyMemories")
 }
 
 // ─── Elderly Profile ─────────────────────────────────────────────────────────
 
 model ElderlyProfile {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @map("user_id")
-  fullName             String   @map("full_name")
-  gender               String?  // male | female
-  birthDate            DateTime? @map("birth_date")
-  identityCardNumber   String?  @map("identity_card_number")
-  residentialAddress   String?  @map("residential_address")
-  emergencyContactPhone String? @map("emergency_contact_phone")
-  medicalHistoryJson   Json?    @map("medical_history_json")
-  allergyDescription   String?  @map("allergy_description")
-  bloodType            String?  @map("blood_type")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  fullName              String
+  gender                String?   // male | female
+  birthDate             DateTime?
+  identityCardNumber    String?
+  residentialAddress    String?
+  emergencyContactPhone String?
+  medicalHistoryJson    String?   // JSON string
+  allergyDescription    String?
+  bloodType             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Relations
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  familyRelations  FamilyRelation[]
-  healthRecords    HealthRecord[]
-  medications      Medication[]
-  medicalCheckups  MedicalCheckup[]
-  serviceOrders    ServiceOrder[]
-  familyMemories   FamilyMemory[]
-
-  @@map("elderly_profiles")
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyRelations FamilyRelation[]
+  healthRecords   HealthRecord[]
+  medications     Medication[]
+  medicalCheckups MedicalCheckup[]
+  serviceOrders   ServiceOrder[]
+  familyMemories  FamilyMemory[]
 }
 
 // ─── Family Relation ─────────────────────────────────────────────────────────
 
 model FamilyRelation {
   id               String   @id @default(cuid())
-  userId           String   @map("user_id")
-  elderlyProfileId String   @map("elderly_profile_id")
-  relationshipType String   @map("relationship_type")
-  isPrimaryContact Boolean  @default(false) @map("is_primary_contact")
-  permissionsJson  Json     @default("{}") @map("permissions_json")
-  createdAt        DateTime @default(now()) @map("created_at")
+  userId           String
+  elderlyProfileId String
+  relationshipType String
+  isPrimaryContact Boolean  @default(false)
+  permissionsJson  String   @default("{}") // JSON string
+  createdAt        DateTime @default(now())
 
   // Relations
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
 
   @@unique([userId, elderlyProfileId])
-  @@map("family_relations")
 }
 
 // ─── Health Record ───────────────────────────────────────────────────────────
 
 model HealthRecord {
-  id                    String   @id @default(cuid())
-  elderlyProfileId      String   @map("elderly_profile_id")
-  recordType            String   @map("record_type")
-  measurementValueJson  Json     @map("measurement_value_json")
-  measurementUnit       String   @map("measurement_unit")
-  measuredAt            DateTime @map("measured_at")
-  sourceDeviceIdentifier String? @map("source_device_identifier")
-  notes                 String?
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                     String   @id @default(cuid())
+  elderlyProfileId       String
+  recordType             String
+  measurementValueJson   String   // JSON string
+  measurementUnit        String
+  measuredAt             DateTime
+  sourceDeviceIdentifier String?
+  notes                  String?
+  createdAt              DateTime @default(now())
 
   // Relations
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
 
   @@index([elderlyProfileId, recordType])
   @@index([measuredAt])
-  @@map("health_records")
 }
 
 // ─── Medication ──────────────────────────────────────────────────────────────
 
 model Medication {
-  id                 String   @id @default(cuid())
-  elderlyProfileId   String   @map("elderly_profile_id")
-  medicationName     String   @map("medication_name")
-  dosageDescription  String   @map("dosage_description")
-  frequencyDescription String @map("frequency_description")
-  startDate          DateTime? @map("start_date")
-  endDate            DateTime? @map("end_date")
-  reminderScheduleJson String[] @map("reminder_schedule_json")
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at")
+  id                   String   @id @default(cuid())
+  elderlyProfileId     String
+  medicationName       String
+  dosageDescription    String
+  frequencyDescription String
+  startDate            DateTime?
+  endDate              DateTime?
+  reminderScheduleJson String   @default("[]") // JSON array string
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
 
   // Relations
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
 
   @@index([elderlyProfileId])
-  @@map("medications")
 }
 
 // ─── Medical Checkup ─────────────────────────────────────────────────────────
 
 model MedicalCheckup {
-  id               String    @id @default(cuid())
-  elderlyProfileId String    @map("elderly_profile_id")
-  hospitalName     String    @map("hospital_name")
-  checkupDate      DateTime  @map("checkup_date")
-  reportFileUrl    String?   @map("report_file_url")
-  summaryText      String?   @map("summary_text")
-  resultsJson      Json?     @map("results_json")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  hospitalName     String
+  checkupDate      DateTime
+  reportFileUrl    String?
+  summaryText      String?
+  resultsJson      String?  // JSON string
+  createdAt        DateTime @default(now())
 
   // Relations
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
 
   @@index([elderlyProfileId])
-  @@map("medical_checkups")
 }
 
 // ─── Service Category ────────────────────────────────────────────────────────
 
 model ServiceCategory {
-  id              String   @id @default(cuid())
-  categoryName    String   @unique @map("category_name")
-  iconIdentifier  String   @map("icon_identifier")
-  descriptionText String?  @map("description_text")
-  displayOrder    Int      @default(0) @map("display_order")
-  isActive        Boolean  @default(true) @map("is_active")
+  id              String  @id @default(cuid())
+  categoryName    String  @unique
+  iconIdentifier  String
+  descriptionText String?
+  displayOrder    Int     @default(0)
+  isActive        Boolean @default(true)
 
   // Relations
   services Service[]
-
-  @@map("service_categories")
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 model Service {
-  id             String   @id @default(cuid())
-  categoryId     String   @map("category_id")
-  serviceName    String   @map("service_name")
-  descriptionText String  @map("description_text")
-  basePrice      Decimal  @map("base_price")
-  priceUnit      String   @map("price_unit")
-  imageUrlsJson  String[] @map("image_urls_json")
-  isActive       Boolean  @default(true) @map("is_active")
+  id              String  @id @default(cuid())
+  categoryId      String
+  serviceName     String
+  descriptionText String
+  basePrice       Float
+  priceUnit       String
+  imageUrlsJson   String  @default("[]") // JSON array string
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
 
   // Relations
-  category     ServiceCategory @relation(fields: [categoryId], references: [id])
+  category      ServiceCategory @relation(fields: [categoryId], references: [id])
   serviceOrders ServiceOrder[]
 
   @@index([categoryId])
-  @@map("services")
 }
 
 // ─── Service Order ───────────────────────────────────────────────────────────
 
 model ServiceOrder {
   id                   String   @id @default(cuid())
-  orderNumber          String   @unique @map("order_number")
-  userId               String   @map("user_id")
-  elderlyProfileId     String   @map("elderly_profile_id")
-  serviceId            String   @map("service_id")
-  orderStatus          String   @default("pending") @map("order_status")
-  totalAmount          Decimal  @map("total_amount")
-  scheduledServiceTime DateTime @map("scheduled_service_time")
-  serviceAddress       String   @map("service_address")
-  specialInstructions  String?  @map("special_instructions")
-  customerRating       Int?     @map("customer_rating")
-  reviewText           String?  @map("review_text")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  orderNumber          String   @unique
+  userId               String
+  elderlyProfileId     String
+  serviceId            String
+  orderStatus          String   @default("pending")
+  totalAmount          Float
+  scheduledServiceTime DateTime
+  serviceAddress       String
+  specialInstructions  String?
+  customerRating       Int?
+  reviewText           String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   // Relations
   user           User           @relation(fields: [userId], references: [id])
@@ -204,17 +194,16 @@ model ServiceOrder {
   @@index([userId])
   @@index([elderlyProfileId])
   @@index([orderStatus])
-  @@map("service_orders")
 }
 
 // ─── Knowledge Category ──────────────────────────────────────────────────────
 
 model KnowledgeCategory {
-  id              String   @id @default(cuid())
-  categoryName    String   @unique @map("category_name")
-  parentCategoryId String? @map("parent_category_id")
-  iconIdentifier  String   @map("icon_identifier")
-  displayOrder    Int      @default(0) @map("display_order")
+  id               String  @id @default(cuid())
+  categoryName     String  @unique
+  parentCategoryId String?
+  iconIdentifier   String
+  displayOrder     Int     @default(0)
 
   // Self-relation for nested categories
   parent   KnowledgeCategory?  @relation("CategoryTree", fields: [parentCategoryId], references: [id])
@@ -222,97 +211,90 @@ model KnowledgeCategory {
 
   // Relations
   articles KnowledgeArticle[]
-
-  @@map("knowledge_categories")
 }
 
 // ─── Knowledge Article ───────────────────────────────────────────────────────
 
 model KnowledgeArticle {
   id              String    @id @default(cuid())
-  categoryId      String    @map("category_id")
+  categoryId      String
   title           String
-  contentMarkdown String    @map("content_markdown")
-  summaryText     String?   @map("summary_text")
-  coverImageUrl   String?   @map("cover_image_url")
-  authorName      String?   @map("author_name")
-  tagsJson        String[]  @map("tags_json")
-  viewCount       Int       @default(0) @map("view_count")
-  isPublished     Boolean   @default(false) @map("is_published")
-  publishedAt     DateTime? @map("published_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  contentMarkdown String
+  summaryText     String?
+  coverImageUrl   String?
+  authorName      String?
+  tagsJson        String    @default("[]") // JSON array string
+  viewCount       Int       @default(0)
+  isPublished     Boolean   @default(false)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
   category KnowledgeCategory @relation(fields: [categoryId], references: [id])
 
   @@index([categoryId])
   @@index([isPublished])
-  @@map("knowledge_articles")
 }
 
 // ─── Family Memory ───────────────────────────────────────────────────────────
 
 model FamilyMemory {
   id               String   @id @default(cuid())
-  elderlyProfileId String   @map("elderly_profile_id")
-  familyUserId     String   @map("family_user_id")
-  memoryType       String   @map("memory_type") // photo | video | text | voice
-  contentText      String?  @map("content_text")
-  fileUrl          String?  @map("file_url")
-  descriptionText  String?  @map("description_text")
-  createdAt        DateTime @default(now()) @map("created_at")
+  elderlyProfileId String
+  familyUserId     String
+  memoryType       String   // photo | video | text | voice
+  contentText      String?
+  fileUrl          String?
+  descriptionText  String?
+  createdAt        DateTime @default(now())
 
   // Relations
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
   familyUser     User           @relation("FamilyMemories", fields: [familyUserId], references: [id])
 
   @@index([elderlyProfileId])
-  @@map("family_memories")
 }
 
 // ─── Conversation ────────────────────────────────────────────────────────────
 
 model Conversation {
   id               String   @id @default(cuid())
-  conversationType String   @map("conversation_type") // private | group
-  conversationName String?  @map("conversation_name")
-  createdAt        DateTime @default(now()) @map("created_at")
+  conversationType String   // private | group
+  conversationName String?
+  createdAt        DateTime @default(now())
 
   // Relations
   members  ConversationMember[]
   messages Message[]
-
-  @@map("conversations")
 }
 
 // ─── Conversation Member ─────────────────────────────────────────────────────
 
 model ConversationMember {
   id             String   @id @default(cuid())
-  conversationId String   @map("conversation_id")
-  userId         String   @map("user_id")
-  joinedAt       DateTime @default(now()) @map("joined_at")
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
-  @@map("conversation_members")
 }
 
 // ─── Message ─────────────────────────────────────────────────────────────────
 
 model Message {
   id             String   @id @default(cuid())
-  conversationId String   @map("conversation_id")
-  senderId       String   @map("sender_id")
-  messageType    String   @map("message_type") // text | image | video | voice | system
-  contentText    String?  @map("content_text")
-  fileUrl        String?  @map("file_url")
-  isRead         Boolean  @default(false) @map("is_read")
-  createdAt      DateTime @default(now()) @map("created_at")
+  conversationId String
+  senderId       String
+  messageType    String   // text | image | video | voice | system
+  contentText    String?
+  fileUrl        String?
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -320,19 +302,18 @@ model Message {
 
   @@index([conversationId])
   @@index([senderId])
-  @@map("messages")
 }
 
 // ─── Video Call Record ───────────────────────────────────────────────────────
 
 model VideoCallRecord {
   id              String    @id @default(cuid())
-  callerUserId    String    @map("caller_user_id")
-  calleeUserId    String    @map("callee_user_id")
-  callStatus      String    @map("call_status") // ringing | connected | ended | missed
-  startedAt       DateTime? @map("started_at")
-  endedAt         DateTime? @map("ended_at")
-  durationSeconds Int?      @map("duration_seconds")
+  callerUserId    String
+  calleeUserId    String
+  callStatus      String    // ringing | connected | ended | missed
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
 
   // Relations
   caller User @relation("CallerCalls", fields: [callerUserId], references: [id])
@@ -340,5 +321,4 @@ model VideoCallRecord {
 
   @@index([callerUserId])
   @@index([calleeUserId])
-  @@map("video_call_records")
 }

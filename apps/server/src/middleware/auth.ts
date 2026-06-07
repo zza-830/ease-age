@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from './errorHandler';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'easeage-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 declare global {
   namespace Express {
