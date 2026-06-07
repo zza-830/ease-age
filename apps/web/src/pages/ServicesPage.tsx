@@ -18,13 +18,21 @@ interface Service {
   image: string;
 }
 
+const serviceImages: Record<string, string> = {
+  '日常保洁': '/images/services/cleaning.png',
+  '营养送餐': '/images/services/meal.webp',
+  '医院陪诊': '/images/services/companion.jpg',
+  '家电维修': '/images/services/repair.jpg',
+  '健康咨询': '/images/services/consultation.jpg',
+};
+
 const mockServices: Service[] = [
-  { id: '1', name: '日常保洁', category: '家政服务', description: '专业保洁人员上门服务', price: 80, unit: '次', rating: 4.8, reviewCount: 256, image: '🏠' },
-  { id: '2', name: '送餐服务', category: '生活服务', description: '营养均衡的每日三餐', price: 25, unit: '餐', rating: 4.9, reviewCount: 1024, image: '🍱' },
-  { id: '3', name: '陪诊服务', category: '医疗服务', description: '专业陪诊人员陪同就医', price: 200, unit: '次', rating: 4.7, reviewCount: 89, image: '🏥' },
-  { id: '4', name: '家电维修', category: '维修服务', description: '各类家电维修保养', price: 50, unit: '次', rating: 4.6, reviewCount: 178, image: '🔧' },
-  { id: '5', name: '按摩理疗', category: '健康服务', description: '专业按摩师上门服务', price: 150, unit: '次', rating: 4.9, reviewCount: 342, image: '💆' },
-  { id: '6', name: '代购服务', category: '生活服务', description: '日常用品代购', price: 15, unit: '次', rating: 4.5, reviewCount: 567, image: '🛒' },
+  { id: '1', name: '日常保洁', category: '家政服务', description: '专业保洁人员上门服务', price: 80, unit: '次', rating: 4.8, reviewCount: 256, image: '/images/services/cleaning.png' },
+  { id: '2', name: '营养送餐', category: '生活服务', description: '营养均衡的每日三餐', price: 25, unit: '餐', rating: 4.9, reviewCount: 1024, image: '/images/services/meal.webp' },
+  { id: '3', name: '医院陪诊', category: '医疗服务', description: '专业陪诊人员陪同就医', price: 200, unit: '次', rating: 4.7, reviewCount: 89, image: '/images/services/companion.jpg' },
+  { id: '4', name: '家电维修', category: '维修服务', description: '各类家电维修保养', price: 50, unit: '次', rating: 4.6, reviewCount: 178, image: '/images/services/repair.jpg' },
+  { id: '5', name: '健康咨询', category: '健康服务', description: '专业按摩师上门服务', price: 150, unit: '次', rating: 4.9, reviewCount: 342, image: '/images/services/consultation.jpg' },
+  { id: '6', name: '代购服务', category: '生活服务', description: '日常用品代购', price: 15, unit: '次', rating: 4.5, reviewCount: 567, image: '/images/services/cleaning.png' },
 ];
 
 const getCategoryEmoji = (category?: string) => {
@@ -78,7 +86,7 @@ export default function ServicesPage() {
         unit: item.priceUnit,
         rating: 4.8,
         reviewCount: 100,
-        image: getCategoryEmoji(item.category?.categoryName),
+        image: serviceImages[item.serviceName] || '/images/services/cleaning.png',
       }));
       setServices(formattedServices);
     } catch (error) {
@@ -150,8 +158,12 @@ export default function ServicesPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredServices.map((service) => (
             <div key={service.id} className="rounded-xl border bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <div className="aspect-video bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center">
-                <span className="text-6xl">{service.image}</span>
+              <div className="aspect-video bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center overflow-hidden">
+                <img
+                  src={serviceImages[service.name] || '/images/services/cleaning.png'}
+                  alt={service.name}
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="p-4">
                 <div className="flex items-start justify-between">
