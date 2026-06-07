@@ -39,8 +39,11 @@ export default function Sidebar() {
     <aside className="flex w-64 flex-col border-r bg-white">
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
-        <h1 className="text-xl font-bold text-orange-500">EaseAge</h1>
-        <span className="ml-2 text-sm text-stone-500">颐智相伴</span>
+        <img src="/logo.svg" alt="EaseAge" className="h-10 w-10" />
+        <div className="ml-3">
+          <h1 className="text-xl font-bold text-orange-500">EaseAge</h1>
+          <p className="text-xs text-stone-500 -mt-1">颐智相伴</p>
+        </div>
       </div>
 
       {/* Navigation */}
