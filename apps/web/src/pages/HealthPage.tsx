@@ -8,117 +8,149 @@ import {
   Plus,
   TrendingUp,
   TrendingDown,
-  Clock
+  Minus,
+  Clock,
+  Thermometer,
+  Droplets,
+  Weight,
+  Wind,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/useAuthStore';
 
-interface HealthMetric {
-  type: string;
-  value: string;
-  unit: string;
-  status: 'normal' | 'warning' | 'danger';
-  trend: 'up' | 'down' | 'stable';
-  lastUpdated: string;
+// 体征类型配置
+const METRIC_CONFIG: Record<string, { label: string; icon: any; color: string; format: (v: any) => string; getStatus: (v: any) => 'normal' | 'warning' | 'danger' }> = {
+  blood_pressure: {
+    label: '血压',
+    icon: Heart,
+    color: 'text-red-500',
+    format: (v) => `${v.systolic}/${v.diastolic}`,
+    getStatus: (v) => v.systolic > 140 || v.diastolic > 90 ? 'warning' : 'normal',
+  },
+  heart_rate: {
+    label: '心率',
+    icon: Activity,
+    color: 'text-blue-500',
+    format: (v) => `${v.value}`,
+    getStatus: (v) => v.value > 100 || v.value < 50 ? 'warning' : 'normal',
+  },
+  blood_sugar: {
+    label: '血糖',
+    icon: Droplets,
+    color: 'text-amber-500',
+    format: (v) => `${v.value}`,
+    getStatus: (v) => v.value > 7.0 ? 'warning' : 'normal',
+  },
+  body_temperature: {
+    label: '体温',
+    icon: Thermometer,
+    color: 'text-orange-500',
+    format: (v) => `${v.value}`,
+    getStatus: (v) => v.value > 37.5 ? 'warning' : 'normal',
+  },
+  blood_oxygen: {
+    label: '血氧',
+    icon: Wind,
+    color: 'text-cyan-500',
+    format: (v) => `${v.value}`,
+    getStatus: (v) => v.value < 95 ? 'warning' : 'normal',
+  },
+  weight: {
+    label: '体重',
+    icon: Weight,
+    color: 'text-green-500',
+    format: (v) => `${v.value}`,
+    getStatus: () => 'normal',
+  },
+};
+
+interface HealthRecord {
+  id: string;
+  recordType: string;
+  measurementValueJson: string;
+  measurementUnit: string;
+  measuredAt: string;
 }
 
 interface Medication {
   id: string;
-  name: string;
-  dosage: string;
-  frequency: string;
-  nextDose: string;
+  medicationName: string;
+  dosageDescription: string;
+  frequencyDescription: string;
+  reminderScheduleJson: string;
   isActive: boolean;
 }
 
-const mockMetrics: HealthMetric[] = [
-  { type: '血压', value: '128/82', unit: 'mmHg', status: 'normal', trend: 'stable', lastUpdated: '08:30' },
-  { type: '心率', value: '72', unit: 'bpm', status: 'normal', trend: 'down', lastUpdated: '08:30' },
-  { type: '血糖', value: '6.2', unit: 'mmol/L', status: 'normal', trend: 'up', lastUpdated: '09:00' },
-  { type: '体温', value: '36.5', unit: '°C', status: 'normal', trend: 'stable', lastUpdated: '07:00' },
-  { type: '血氧', value: '98', unit: '%', status: 'normal', trend: 'stable', lastUpdated: '08:30' },
-  { type: '体重', value: '65', unit: 'kg', status: 'normal', trend: 'down', lastUpdated: '昨天' },
-];
-
-const mockMedications: Medication[] = [
-  { id: '1', name: '降压药', dosage: '1片', frequency: '每日一次', nextDose: '08:00', isActive: true },
-  { id: '2', name: '降糖药', dosage: '1片', frequency: '每日两次', nextDose: '12:00', isActive: true },
-  { id: '3', name: '钙片', dosage: '2片', frequency: '每日一次', nextDose: '20:00', isActive: true },
-];
+interface Checkup {
+  id: string;
+  hospitalName: string;
+  checkupDate: string;
+  summaryText: string;
+  resultsJson: string;
+}
 
 const statusColors = {
   normal: 'bg-green-100 text-green-800',
-  warning: 'bg-yellow-100 text-yellow-800',
+  warning: 'bg-amber-100 text-amber-800',
   danger: 'bg-red-100 text-red-800',
 };
-
-const statusLabels = {
-  normal: '正常',
-  warning: '注意',
-  danger: '异常',
-};
+const statusLabels = { normal: '正常', warning: '注意', danger: '异常' };
 
 export default function HealthPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'metrics' | 'medications' | 'checkups' | 'reports'>('metrics');
-  const [healthRecords, setHealthRecords] = useState<HealthMetric[]>([]);
+  const [records, setRecords] = useState<HealthRecord[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
+  const [checkups, setCheckups] = useState<Checkup[]>([]);
+  const [elderlyProfileId, setElderlyProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchHealthData();
-    } else {
-      // No user, use mock data
-      setHealthRecords(mockMetrics);
-      setMedications(mockMedications);
-      setIsLoading(false);
-    }
+    if (user?.id) fetchData();
+    else setIsLoading(false);
   }, [user]);
 
-  const fetchHealthData = async () => {
+  const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Get elderly profile first
-      const profileResponse = await api.get<{ data: any }>(`/users/${user?.id}/elderly-profile`);
-      const elderlyProfileId = profileResponse.data?.id;
+      console.log('[HealthPage] user.id:', user!.id);
 
-      if (elderlyProfileId) {
-        // Fetch health records
-        const recordsResponse = await api.get<{ data: { items: any[] } }>(`/health/records/${elderlyProfileId}`);
-        const formattedRecords: HealthMetric[] = recordsResponse.data.items.map((item: any) => ({
-          type: item.metricType || item.type,
-          value: item.value,
-          unit: item.unit,
-          status: item.status || 'normal',
-          trend: item.trend || 'stable',
-          lastUpdated: new Date(item.recordedAt || item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-        }));
-        setHealthRecords(formattedRecords.length > 0 ? formattedRecords : mockMetrics);
+      // 获取老人档案
+      const profileRes = await api.get<{ data: any }>(`/users/${user!.id}/elderly-profile`);
+      const profileId = profileRes.data?.id;
+      console.log('[HealthPage] profileId:', profileId);
 
-        // Fetch medications
-        const medsResponse = await api.get<{ data: any[] }>(`/health/medications/${elderlyProfileId}`);
-        const formattedMeds: Medication[] = medsResponse.data.map((item: any) => ({
-          id: item.id,
-          name: item.medicationName || item.name,
-          dosage: item.dosage,
-          frequency: item.frequency,
-          nextDose: item.nextDoseTime || '08:00',
-          isActive: item.isActive !== false,
-        }));
-        setMedications(formattedMeds.length > 0 ? formattedMeds : mockMedications);
-      } else {
-        setHealthRecords(mockMetrics);
-        setMedications(mockMedications);
-      }
-    } catch (error) {
-      console.error('Failed to fetch health data:', error);
-      setHealthRecords(mockMetrics);
-      setMedications(mockMedications);
+      if (!profileId) { setIsLoading(false); return; }
+      setElderlyProfileId(profileId);
+
+      // 并行获取数据
+      const [recordsRes, medsRes, checkupsRes] = await Promise.all([
+        api.get<{ data: { items: HealthRecord[] } }>(`/health/records/${profileId}`).catch((e) => { console.error('[HealthPage] records error:', e); return { data: { items: [] } }; }),
+        api.get<{ data: Medication[] }>(`/health/medications/${profileId}`).catch((e) => { console.error('[HealthPage] meds error:', e); return { data: [] }; }),
+        api.get<{ data: Checkup[] }>(`/health/checkups/${profileId}`).catch((e) => { console.error('[HealthPage] checkups error:', e); return { data: [] }; }),
+      ]);
+
+      console.log('[HealthPage] records:', recordsRes.data?.items?.length, 'meds:', medsRes.data?.length, 'checkups:', checkupsRes.data?.length);
+
+      setRecords(recordsRes.data?.items || []);
+      setMedications(medsRes.data || []);
+      setCheckups(checkupsRes.data || []);
+    } catch (err) {
+      console.error('[HealthPage] 获取健康数据失败:', err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // 按类型分组，取每种最新一条
+  const latestRecords = (() => {
+    const map = new Map<string, HealthRecord>();
+    for (const r of records) {
+      if (!map.has(r.recordType)) map.set(r.recordType, r);
+    }
+    return Array.from(map.values());
+  })();
 
   return (
     <div className="space-y-6">
@@ -126,12 +158,8 @@ export default function HealthPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-stone-900">健康管理</h2>
-          <p className="text-stone-500">记录和管理老人健康数据</p>
+          <p className="text-stone-500">记录和管理健康数据</p>
         </div>
-        <button className="flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">
-          <Plus className="mr-2 h-4 w-4" />
-          添加记录
-        </button>
       </div>
 
       {/* Health Score */}
@@ -160,11 +188,12 @@ export default function HealthPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center border-b-2 px-1 py-4 text-sm font-medium transition-colors ${
+              className={cn(
+                'flex items-center border-b-2 px-1 py-4 text-sm font-medium transition-colors',
                 activeTab === tab.id
                   ? 'border-orange-500 text-orange-600'
                   : 'border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-700'
-              }`}
+              )}
             >
               <tab.icon className="mr-2 h-4 w-4" />
               {tab.label}
@@ -173,111 +202,142 @@ export default function HealthPage() {
         </nav>
       </div>
 
-      {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
         </div>
       )}
 
-      {/* Tab Content */}
+      {/* 体征数据 */}
       {!isLoading && activeTab === 'metrics' && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {healthRecords.map((metric, index) => (
-            <div key={index} className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-stone-500">{metric.type}</p>
-                  <p className="mt-1 text-2xl font-bold text-stone-900">
-                    {metric.value}
-                    <span className="ml-1 text-sm font-normal text-stone-500">{metric.unit}</span>
-                  </p>
-                </div>
-                <div className="flex flex-col items-end space-y-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[metric.status]}`}>
-                    {statusLabels[metric.status]}
+          {latestRecords.map((record) => {
+            const config = METRIC_CONFIG[record.recordType];
+            if (!config) return null;
+            const values = JSON.parse(record.measurementValueJson);
+            const displayValue = config.format(values);
+            const status = config.getStatus(values);
+            const Icon = config.icon;
+            return (
+              <div key={record.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-stone-50 p-2.5">
+                      <Icon className={cn('h-5 w-5', config.color)} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-stone-500">{config.label}</p>
+                      <p className="text-2xl font-bold text-stone-900">
+                        {displayValue}
+                        <span className="ml-1 text-sm font-normal text-stone-400">{record.measurementUnit}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusColors[status])}>
+                    {statusLabels[status]}
                   </span>
-                  {metric.trend === 'up' && <TrendingUp className="h-4 w-4 text-orange-500" />}
-                  {metric.trend === 'down' && <TrendingDown className="h-4 w-4 text-green-500" />}
-                  {metric.trend === 'stable' && <Activity className="h-4 w-4 text-stone-400" />}
                 </div>
+                <p className="mt-2 flex items-center text-xs text-stone-400">
+                  <Clock className="mr-1 h-3 w-3" />
+                  {new Date(record.measuredAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
-              <p className="mt-2 flex items-center text-xs text-stone-500">
-                <Clock className="mr-1 h-3 w-3" />
-                更新于 {metric.lastUpdated}
-              </p>
+            );
+          })}
+          {latestRecords.length === 0 && (
+            <div className="col-span-full text-center py-12 text-stone-400">
+              暂无体征数据
             </div>
-          ))}
+          )}
         </div>
       )}
 
+      {/* 用药管理 */}
       {!isLoading && activeTab === 'medications' && (
         <div className="space-y-4">
-          {medications.map((medication) => (
-            <div key={medication.id} className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-lg bg-blue-50 p-3">
-                    <Pill className="h-6 w-6 text-blue-500" />
+          {medications.map((med) => {
+            const schedule = (() => {
+              try { return JSON.parse(med.reminderScheduleJson || '[]'); } catch { return []; }
+            })();
+            return (
+              <div key={med.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-lg bg-blue-50 p-3">
+                      <Pill className="h-6 w-6 text-blue-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-stone-900">{med.medicationName}</h4>
+                      <p className="text-sm text-stone-500">{med.dosageDescription} · {med.frequencyDescription}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-stone-900">{medication.name}</h4>
-                    <p className="text-sm text-stone-500">{medication.dosage} · {medication.frequency}</p>
+                  <div className="text-right">
+                    <p className="text-sm text-stone-500">服药时间</p>
+                    <p className="font-medium text-orange-600">{schedule.join(', ') || '未设置'}</p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-stone-500">下次服药</p>
-                  <p className="font-medium text-orange-600">{medication.nextDose}</p>
                 </div>
               </div>
-            </div>
-          ))}
-          <button className="w-full rounded-lg border-2 border-dashed border-stone-300 py-4 text-sm font-medium text-stone-500 hover:border-orange-300 hover:text-orange-500">
-            + 添加药物
-          </button>
+            );
+          })}
+          {medications.length === 0 && (
+            <div className="text-center py-12 text-stone-400">暂无用药记录</div>
+          )}
         </div>
       )}
 
+      {/* 体检记录 */}
       {!isLoading && activeTab === 'checkups' && (
         <div className="space-y-4">
-          {[
-            { date: '2026-06-01', hospital: '社区卫生中心', type: '常规体检', status: '已完成' },
-            { date: '2026-05-15', hospital: '市人民医院', type: '专项检查', status: '已完成' },
-            { date: '2026-04-20', hospital: '社区卫生中心', type: '常规体检', status: '已完成' },
-          ].map((checkup, index) => (
-            <div key={index} className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-lg bg-green-50 p-3">
-                    <Calendar className="h-6 w-6 text-green-500" />
+          {checkups.map((checkup) => {
+            const results = (() => {
+              try { return JSON.parse(checkup.resultsJson || '{}'); } catch { return {}; }
+            })();
+            return (
+              <div key={checkup.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-lg bg-green-50 p-3">
+                      <Calendar className="h-6 w-6 text-green-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-stone-900">{checkup.hospitalName}</h4>
+                      <p className="text-sm text-stone-500">{checkup.summaryText?.substring(0, 60)}...</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-stone-900">{checkup.type}</h4>
-                    <p className="text-sm text-stone-500">{checkup.hospital}</p>
+                  <div className="text-right">
+                    <p className="text-sm text-stone-500">{new Date(checkup.checkupDate).toLocaleDateString('zh-CN')}</p>
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">已完成</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-stone-500">{checkup.date}</p>
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                    {checkup.status}
-                  </span>
-                </div>
+                {Object.keys(results).length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3">
+                    {Object.entries(results).map(([key, val]) => (
+                      <div key={key} className="text-xs">
+                        <span className="text-stone-500">{key}：</span>
+                        <span className="text-stone-700">{String(val)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
+          {checkups.length === 0 && (
+            <div className="text-center py-12 text-stone-400">暂无体检记录</div>
+          )}
         </div>
       )}
 
+      {/* 健康报告 */}
       {!isLoading && activeTab === 'reports' && (
         <div className="space-y-4">
           {[
             { date: '2026-06', title: '月度健康报告', summary: '整体健康状况良好，血压血糖控制稳定' },
             { date: '2026-05', title: '月度健康报告', summary: '血压略有波动，建议调整用药' },
-            { date: '2026-04', title: '月度健康报告', summary: '各项指标正常，继续保持' },
           ].map((report, index) => (
             <div key={index} className="rounded-xl border bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-4">
                   <div className="rounded-lg bg-purple-50 p-3">
                     <FileText className="h-6 w-6 text-purple-500" />
                   </div>
@@ -286,12 +346,7 @@ export default function HealthPage() {
                     <p className="text-sm text-stone-500">{report.summary}</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-stone-500">{report.date}</span>
-                  <button className="rounded-lg border px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
-                    查看详情
-                  </button>
-                </div>
+                <span className="text-sm text-stone-500">{report.date}</span>
               </div>
             </div>
           ))}

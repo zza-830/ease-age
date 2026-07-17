@@ -56,6 +56,11 @@ model ElderlyProfile {
   medicalCheckups MedicalCheckup[]
   serviceOrders   ServiceOrder[]
   familyMemories  FamilyMemory[]
+  kgNodes         KgNode[]
+  dailyRoutines   DailyRoutine[]
+  importantDates  ImportantDate[]
+  aiConversationLogs AiConversationLog[]
+  lifeEvents      LifeEvent[]
 }
 
 // ─── Family Relation ─────────────────────────────────────────────────────────
@@ -321,4 +326,121 @@ model VideoCallRecord {
 
   @@index([callerUserId])
   @@index([calleeUserId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  知识图谱模块 (Knowledge Graph)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── 知识图谱节点 ─────────────────────────────────────────────────────────────
+// 代表老人生活中的一切实体：人物、地点、事件、偏好、健康状况等
+
+model KgNode {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  nodeType         String   // person | place | event | preference | health | habit | food | hobby | pet | item
+  label            String   // 显示名称，如"女儿张丽"、"红烧肉"、"太极拳"
+  description      String?  // 详细描述
+  attributesJson   String   @default("{}") // JSON: 灵活属性，如 {"phone":"138xxx","birthday":"1990-01-01"}
+  importance       Int      @default(5) // 1-10 重要程度
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  outgoingEdges  KgEdge[]       @relation("SourceNode")
+  incomingEdges  KgEdge[]       @relation("TargetNode")
+
+  @@index([elderlyProfileId, nodeType])
+  @@index([elderlyProfileId, label])
+}
+
+// ─── 知识图谱边（关系） ───────────────────────────────────────────────────────
+// 连接两个节点，表示它们之间的关系
+
+model KgEdge {
+  id         String @id @default(cuid())
+  sourceId   String // 起始节点
+  targetId   String // 目标节点
+  relation   String // 关系类型：is_child_of | likes | has_condition | takes_medication | lives_at | works_at | born_on | married_to | friend_of | caretaker_of | fears | allergic_to
+  weight     Float  @default(1.0) // 关系强度 0-1
+  metadata   String @default("{}") // JSON: 关系附加信息
+  createdAt  DateTime @default(now())
+
+  sourceNode KgNode @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetNode KgNode @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, relation])
+  @@index([sourceId])
+  @@index([targetId])
+  @@index([relation])
+}
+
+// ─── 日常作息 ─────────────────────────────────────────────────────────────────
+
+model DailyRoutine {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  timeOfDay        String   // "06:00", "12:30", "21:00"
+  activity         String   // "起床", "午休", "散步"
+  daysOfWeek       String   @default("1,2,3,4,5,6,7") // "1,2,3,4,5" = 工作日
+  notes            String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId])
+}
+
+// ─── 重要日期 ─────────────────────────────────────────────────────────────────
+
+model ImportantDate {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  dateType         String   // birthday | anniversary | holiday | memorial | custom
+  label            String   // "儿子生日", "结婚纪念日"
+  monthDay         String   // "07-22" 或 "2020-05-12" (含年份)
+  isLunar          Boolean  @default(false) // 是否农历
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId])
+}
+
+// ─── AI 对话日志 ──────────────────────────────────────────────────────────────
+
+model AiConversationLog {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  sessionId        String   // 一次通话的会话ID
+  role             String   // user | assistant
+  contentText      String
+  audioUrl         String?  // 录音文件URL（可选）
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId, sessionId])
+  @@index([createdAt])
+}
+
+// ─── 生活事件 ─────────────────────────────────────────────────────────────────
+
+model LifeEvent {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  eventType        String   // travel | celebration | illness | move | job | education | other
+  title            String
+  description      String?
+  eventDate        DateTime?
+  location         String?
+  peopleInvolved   String?  // JSON array of names
+  emotionalTag     String?  // happy | sad | proud | neutral
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId])
 }

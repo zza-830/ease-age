@@ -159,7 +159,7 @@ export default function DashboardPage() {
             <h3 className="font-semibold text-stone-900 mb-4">快捷操作</h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: '视频通话', path: '/video-chat', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+                { label: '与AI通话', path: '/video-chat', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
                 { label: '预约服务', path: '/services', color: 'bg-green-50 text-green-700 hover:bg-green-100' },
                 { label: '健康记录', path: '/health', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
                 { label: '知识学习', path: '/knowledge', color: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
@@ -265,8 +265,8 @@ export default function DashboardPage() {
             <div className="divide-y divide-stone-100">
               <ActivityItem
                 time="14:30"
-                title="与女儿视频通话"
-                description="通话时长 15分钟"
+                title="使用语音助手"
+                description="与AI助手对话 15分钟"
                 type="call"
               />
               <ActivityItem

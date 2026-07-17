@@ -1,244 +1,367 @@
 import { useState, useEffect } from 'react';
 import {
-  BookOpen,
-  Search,
-  Heart,
-  Brain,
-  Apple,
-  Moon,
-  Bookmark,
-  Clock,
-  Eye,
-  ChevronRight
+  Heart, Users, Apple, Calendar, Clock, Star, BookOpen,
+  ChevronRight, MapPin, Activity, Utensils, Music, Flower2,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/useAuthStore';
 
-interface Article {
+const NODE_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
+  person:     { label: '人物关系', icon: Users,  color: 'blue' },
+  preference: { label: '个人喜好', icon: Star,   color: 'amber' },
+  health:     { label: '健康状况', icon: Heart,  color: 'red' },
+  place:      { label: '常去地点', icon: MapPin, color: 'green' },
+  event:      { label: '人生事件', icon: Calendar, color: 'purple' },
+  habit:      { label: '生活习惯', icon: Clock,  color: 'teal' },
+  food:       { label: '饮食偏好', icon: Utensils, color: 'orange' },
+  hobby:      { label: '兴趣爱好', icon: Flower2, color: 'pink' },
+};
+
+const COLOR_MAP: Record<string, { bg: string; text: string; border: string; light: string }> = {
+  blue:   { bg: 'bg-blue-500',   text: 'text-blue-600',   border: 'border-blue-200',   light: 'bg-blue-50' },
+  amber:  { bg: 'bg-amber-500',  text: 'text-amber-600',  border: 'border-amber-200',  light: 'bg-amber-50' },
+  red:    { bg: 'bg-red-500',    text: 'text-red-600',    border: 'border-red-200',    light: 'bg-red-50' },
+  green:  { bg: 'bg-emerald-500',text: 'text-emerald-600',border: 'border-emerald-200',light: 'bg-emerald-50' },
+  purple: { bg: 'bg-violet-500', text: 'text-violet-600', border: 'border-violet-200', light: 'bg-violet-50' },
+  teal:   { bg: 'bg-teal-500',   text: 'text-teal-600',   border: 'border-teal-200',   light: 'bg-teal-50' },
+  orange: { bg: 'bg-orange-500', text: 'text-orange-600', border: 'border-orange-200', light: 'bg-orange-50' },
+  pink:   { bg: 'bg-pink-500',   text: 'text-pink-600',   border: 'border-pink-200',   light: 'bg-pink-50' },
+};
+
+interface KgNode {
   id: string;
-  title: string;
-  summary: string;
-  category: string;
-  author: string;
-  date: string;
-  readTime: string;
-  views: number;
-  isBookmarked: boolean;
-  coverImage: string;
+  nodeType: string;
+  label: string;
+  description: string | null;
+  attributesJson: string;
+  importance: number;
 }
 
-const mockArticles: Article[] = [
-  { id: '1', title: '老年人高血压饮食指南', summary: '了解如何通过饮食控制血压...', category: '健康养生', author: '张医生', date: '2026-06-05', readTime: '5分钟', views: 1234, isBookmarked: true, coverImage: '🥗' },
-  { id: '2', title: '糖尿病患者的日常管理', summary: '血糖监测、饮食控制和运动建议...', category: '疾病预防', author: '李医生', date: '2026-06-04', readTime: '8分钟', views: 892, isBookmarked: false, coverImage: '💉' },
-  { id: '3', title: '老年人心理健康指南', summary: '如何保持积极心态，预防抑郁...', category: '心理关怀', author: '王心理师', date: '2026-06-03', readTime: '6分钟', views: 567, isBookmarked: true, coverImage: '🧠' },
-  { id: '4', title: '夏季老年人养生要点', summary: '防暑降温、饮食调理建议...', category: '健康养生', author: '赵营养师', date: '2026-06-02', readTime: '4分钟', views: 2341, isBookmarked: false, coverImage: '☀️' },
-  { id: '5', title: '老年人睡眠改善方法', summary: '失眠原因分析及改善建议...', category: '生活常识', author: '刘医生', date: '2026-06-01', readTime: '7分钟', views: 1567, isBookmarked: true, coverImage: '😴' },
-  { id: '6', title: '关节炎的预防与护理', summary: '关节保护、运动建议...', category: '疾病预防', author: '陈医生', date: '2026-05-31', readTime: '6分钟', views: 789, isBookmarked: false, coverImage: '🦴' },
-];
+interface KgEdge {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  relation: string;
+  sourceNode: KgNode;
+  targetNode: KgNode;
+}
 
-const getCategoryEmoji = (category?: string) => {
-  const emojiMap: Record<string, string> = {
-    '健康养生': '🥗',
-    '疾病预防': '💉',
-    '心理关怀': '🧠',
-    '生活常识': '😴',
-    '运动健身': '🏃',
-    '营养饮食': '🍎',
-  };
-  return emojiMap[category || ''] || '📚';
-};
+interface Routine {
+  id: string;
+  timeOfDay: string;
+  activity: string;
+  daysOfWeek: string;
+}
 
-const iconMap: Record<string, any> = {
-  '全部': BookOpen,
-  '健康养生': Heart,
-  '疾病预防': Apple,
-  '心理关怀': Brain,
-  '生活常识': Moon,
-};
+interface ImportantDate {
+  id: string;
+  dateType: string;
+  label: string;
+  monthDay: string;
+  isLunar: boolean;
+  notes: string | null;
+}
 
-interface CategoryInfo {
-  id?: string;
-  name: string;
-  icon: any;
-  count: number;
+interface LifeEvent {
+  id: string;
+  eventType: string;
+  title: string;
+  description: string | null;
+  eventDate: string;
+  location: string | null;
+  emotionalTag: string | null;
 }
 
 export default function KnowledgePage() {
-  const [selectedCategory, setSelectedCategory] = useState('全部');
+  const { user } = useAuthStore();
+  const [nodes, setNodes] = useState<KgNode[]>([]);
+  const [edges, setEdges] = useState<KgEdge[]>([]);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [dates, setDates] = useState<ImportantDate[]>([]);
+  const [events, setEvents] = useState<LifeEvent[]>([]);
+  const [expandedType, setExpandedType] = useState<string | null>('person');
   const [searchQuery, setSearchQuery] = useState('');
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [categories, setCategories] = useState<CategoryInfo[]>([
-    { name: '全部', icon: BookOpen, count: 156 },
-    { name: '健康养生', icon: Heart, count: 45 },
-    { name: '疾病预防', icon: Apple, count: 38 },
-    { name: '心理关怀', icon: Brain, count: 28 },
-    { name: '生活常识', icon: Moon, count: 45 },
-  ]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    if (user?.id) fetchGraph();
+    else setIsLoading(false);
+  }, [user]);
 
-  useEffect(() => {
-    fetchArticles();
-  }, [selectedCategory, searchQuery]);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await api.get<{ data: any[] }>('/knowledge/categories');
-      const categoryList: CategoryInfo[] = [
-        { name: '全部', icon: BookOpen, count: 0 },
-        ...response.data.map(cat => ({
-          id: cat.id,
-          name: cat.categoryName,
-          icon: iconMap[cat.categoryName] || BookOpen,
-          count: cat.articleCount || 0,
-        })),
-      ];
-      setCategories(categoryList);
-    } catch (error) {
-      console.error('Failed to fetch categories:', error);
-    }
-  };
-
-  const fetchArticles = async () => {
+  const fetchGraph = async () => {
     try {
       setIsLoading(true);
-      const params = new URLSearchParams();
-      if (selectedCategory !== '全部') {
-        const cat = categories.find(c => c.name === selectedCategory);
-        if (cat?.id) params.append('categoryId', cat.id);
-      }
-      if (searchQuery) params.append('search', searchQuery);
+      const profileRes = await api.get<{ data: any }>(`/users/${user!.id}/elderly-profile`);
+      const pid = profileRes.data?.id;
+      if (!pid) { setIsLoading(false); return; }
 
-      const response = await api.get<{ data: { items: any[] } }>(`/knowledge/articles?${params}`);
-      const formattedArticles = response.data.items.map(item => ({
-        id: item.id,
-        title: item.title,
-        summary: item.summaryText || '',
-        category: item.category?.categoryName || '其他',
-        author: item.authorName || '匿名',
-        date: new Date(item.publishedAt || item.createdAt).toLocaleDateString('zh-CN'),
-        readTime: '5分钟',
-        views: item.viewCount,
-        isBookmarked: false,
-        coverImage: getCategoryEmoji(item.category?.categoryName),
-      }));
-      setArticles(formattedArticles);
-    } catch (error) {
-      console.error('Failed to fetch articles:', error);
-      setArticles(mockArticles);
+      const [graphRes, routinesRes, datesRes, eventsRes] = await Promise.all([
+        api.get<{ data: { nodes: KgNode[]; edges: KgEdge[] } }>(`/kg/${pid}/graph`).catch(() => ({ data: { nodes: [], edges: [] } })),
+        api.get<{ data: Routine[] }>(`/kg/${pid}/routines`).catch(() => ({ data: [] })),
+        api.get<{ data: ImportantDate[] }>(`/kg/${pid}/important-dates`).catch(() => ({ data: [] })),
+        api.get<{ data: LifeEvent[] }>(`/kg/${pid}/life-events`).catch(() => ({ data: [] })),
+      ]);
+
+      setNodes(graphRes.data?.nodes || []);
+      setEdges(graphRes.data?.edges || []);
+      setRoutines(routinesRes.data || []);
+      setDates(datesRes.data || []);
+      setEvents(eventsRes.data || []);
+    } catch (err) {
+      console.error('获取知识图谱失败:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filteredArticles = articles.filter(article => {
-    const matchesCategory = selectedCategory === '全部' || article.category === selectedCategory;
-    const matchesSearch = !searchQuery || article.title.includes(searchQuery) || article.summary.includes(searchQuery);
-    return matchesCategory && matchesSearch;
-  });
+  // 按类型分组
+  const grouped: Record<string, KgNode[]> = {};
+  for (const node of nodes) {
+    const t = node.nodeType;
+    if (!grouped[t]) grouped[t] = [];
+    grouped[t].push(node);
+  }
+
+  // 搜索过滤
+  const filteredNodes = searchQuery
+    ? nodes.filter((n) => n.label.includes(searchQuery) || (n.description && n.description.includes(searchQuery)))
+    : null;
+
+  // 获取某节点的关系
+  const getNodeRelations = (nodeId: string) => {
+    return edges.filter((e) => e.sourceId === nodeId || e.targetId === nodeId);
+  };
+
+  const RELATION_LABELS: Record<string, string> = {
+    is_parent_of: '是…的父母',
+    married_to: '配偶',
+    is_grandparent_of: '是…的祖父母',
+    is_aunt_of: '是…的姑姑/叔叔',
+    friend_of: '朋友',
+    caretaker_of: '护理',
+    has_condition: '患有',
+    allergic_to: '过敏',
+    treats: '治疗',
+    likes: '喜欢',
+    dislikes: '不喜欢',
+    has_habit: '习惯',
+    lives_at: '居住在',
+    works_at: '工作在',
+    visits_hospital: '就诊于',
+    frequents: '常去',
+    worked_at: '曾在…工作',
+    participates_in: '参与',
+    affected_by: '经历',
+    experienced: '经历',
+    proud_of: '自豪',
+    wishes: '愿望',
+  };
+
+  const EVENT_ICONS: Record<string, any> = {
+    travel: MapPin, celebration: Star, illness: Heart,
+    move: MapPin, job: Activity, education: BookOpen, other: Calendar,
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-stone-900">知识库</h2>
-        <p className="text-stone-500">健康养生知识，与家人共享</p>
+        <h2 className="text-2xl font-bold text-stone-900">我的档案</h2>
+        <p className="text-stone-500">
+          {nodes.length} 个节点 · {edges.length} 条关系 · {routines.length} 条作息 · {events.length} 个人生事件
+        </p>
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+      <div className="relative max-w-md">
         <input
           type="text"
-          placeholder="搜索知识文章..."
+          placeholder="搜索档案内容..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-lg border border-stone-200 pl-10 pr-4 py-3 text-sm focus:border-orange-300 focus:outline-none"
+          className="w-full rounded-lg border border-stone-200 px-4 py-2.5 text-sm focus:border-orange-300 focus:outline-none"
         />
       </div>
 
-      <div className="flex gap-6">
-        {/* Sidebar Categories */}
-        <div className="w-64 space-y-2">
-          {categories.map((category) => (
-            <button
-              key={category.name}
-              onClick={() => setSelectedCategory(category.name)}
-              className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left ${
-                selectedCategory === category.name
-                  ? 'bg-orange-50 text-orange-600'
-                  : 'text-stone-600 hover:bg-stone-50'
-              }`}
-            >
-              <div className="flex items-center">
-                <category.icon className="mr-3 h-5 w-5" />
-                <span className="font-medium">{category.name}</span>
-              </div>
-              <span className="text-sm text-stone-400">{category.count}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Articles Grid */}
-        <div className="flex-1">
-          {/* Loading State */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
-            </div>
-          )}
-
-          {!isLoading && (
-            <div className="grid gap-6 md:grid-cols-2">
-              {filteredArticles.map((article) => (
-                <div key={article.id} className="rounded-xl border bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="aspect-[2/1] bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
-                    <span className="text-6xl">{article.coverImage}</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">
-                        {article.category}
-                      </span>
-                      <button className={`p-1 ${article.isBookmarked ? 'text-orange-500' : 'text-stone-400'}`}>
-                        <Bookmark className={`h-4 w-4 ${article.isBookmarked ? 'fill-orange-500' : ''}`} />
-                      </button>
-                    </div>
-                    <h3 className="mt-2 font-semibold text-stone-900 line-clamp-2">{article.title}</h3>
-                    <p className="mt-1 text-sm text-stone-500 line-clamp-2">{article.summary}</p>
-                    <div className="mt-4 flex items-center justify-between text-xs text-stone-500">
-                      <div className="flex items-center space-x-4">
-                        <span className="flex items-center">
-                          <Clock className="mr-1 h-3 w-3" />
-                          {article.readTime}
-                        </span>
-                        <span className="flex items-center">
-                          <Eye className="mr-1 h-3 w-3" />
-                          {article.views}
-                        </span>
-                      </div>
-                      <span>{article.date}</span>
-                    </div>
-                    <button className="mt-4 w-full flex items-center justify-center rounded-lg border py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
-                      阅读全文
-                      <ChevronRight className="ml-1 h-4 w-4" />
-                    </button>
-                  </div>
+      {/* 搜索结果 */}
+      {filteredNodes && (
+        <div className="rounded-xl border bg-white p-4">
+          <p className="mb-3 text-sm font-medium text-stone-700">搜索结果 ({filteredNodes.length})</p>
+          <div className="flex flex-wrap gap-2">
+            {filteredNodes.map((node) => {
+              const config = NODE_TYPE_CONFIG[node.nodeType] || NODE_TYPE_CONFIG.preference;
+              const colors = COLOR_MAP[config.color] || COLOR_MAP.amber;
+              return (
+                <div key={node.id} className={cn('rounded-lg border px-3 py-1.5 text-sm', colors.light, colors.border)}>
+                  <span className={cn('font-medium', colors.text)}>{config.label}</span>
+                  <span className="mx-1.5 text-stone-300">·</span>
+                  <span className="text-stone-700">{node.label}</span>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!isLoading && filteredArticles.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-stone-500">未找到匹配的文章</p>
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
+      )}
+
+      {/* 类型卡片 */}
+      <div className="grid grid-cols-5 gap-3">
+        {Object.entries(NODE_TYPE_CONFIG).map(([type, config]) => {
+          const count = grouped[type]?.length || 0;
+          if (count === 0) return null;
+          const colors = COLOR_MAP[config.color];
+          return (
+            <button
+              key={type}
+              onClick={() => setExpandedType(expandedType === type ? null : type)}
+              className={cn(
+                'flex flex-col items-center gap-2 rounded-xl border p-4 transition-all',
+                expandedType === type ? `${colors.light} ${colors.border} border-2` : 'border-stone-200 bg-white hover:bg-stone-50'
+              )}
+            >
+              <div className={cn('rounded-lg p-2', colors.light)}>
+                <config.icon className={cn('h-5 w-5', colors.text)} />
+              </div>
+              <span className="text-xs font-medium text-stone-700">{config.label}</span>
+              <span className="text-xs text-stone-400">{count}项</span>
+            </button>
+          );
+        })}
       </div>
+
+      {/* 知识图谱节点详情 */}
+      {expandedType && grouped[expandedType] && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="border-b px-5 py-4">
+            <h3 className="font-semibold text-stone-900">
+              {NODE_TYPE_CONFIG[expandedType]?.label || expandedType}
+            </h3>
+          </div>
+          <div className="divide-y">
+            {grouped[expandedType].map((node) => {
+              const relations = getNodeRelations(node.id);
+              return (
+                <div key={node.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium text-stone-900">{node.label}</p>
+                      {node.description && (
+                        <p className="mt-0.5 text-sm text-stone-500">{node.description}</p>
+                      )}
+                    </div>
+                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                      重要度 {node.importance}/10
+                    </span>
+                  </div>
+                  {relations.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {relations.slice(0, 5).map((rel) => {
+                        const isSource = rel.sourceId === node.id;
+                        const other = isSource ? rel.targetNode : rel.sourceNode;
+                        const relLabel = RELATION_LABELS[rel.relation] || rel.relation;
+                        return (
+                          <span key={rel.id} className="rounded bg-stone-50 px-2 py-0.5 text-xs text-stone-600">
+                            {isSource ? `→ ${relLabel} →` : `← ${relLabel} ←`} {other?.label?.split('（')[0]}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 日常作息 */}
+      {routines.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="border-b px-5 py-4">
+            <h3 className="font-semibold text-stone-900">日常作息</h3>
+          </div>
+          <div className="divide-y">
+            {routines.map((r) => (
+              <div key={r.id} className="flex items-center gap-4 px-5 py-3">
+                <span className="w-16 text-sm font-mono font-medium text-orange-600">{r.timeOfDay}</span>
+                <span className="text-sm text-stone-700">{r.activity}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 重要日期 */}
+      {dates.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="border-b px-5 py-4">
+            <h3 className="font-semibold text-stone-900">重要日期</h3>
+          </div>
+          <div className="divide-y">
+            {dates.map((d) => (
+              <div key={d.id} className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-sm font-medium text-stone-700">{d.label}</p>
+                  {d.notes && <p className="text-xs text-stone-400">{d.notes}</p>}
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-mono text-stone-600">{d.monthDay}</span>
+                  {d.isLunar && <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-600">农历</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 人生事件 */}
+      {events.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="border-b px-5 py-4">
+            <h3 className="font-semibold text-stone-900">人生大事记</h3>
+          </div>
+          <div className="relative">
+            {/* 时间线 */}
+            <div className="absolute left-8 top-0 bottom-0 w-px bg-stone-200" />
+            <div className="divide-y">
+              {events.map((e) => {
+                const Icon = EVENT_ICONS[e.eventType] || Calendar;
+                const emotionColor = e.emotionalTag === 'happy' ? 'text-green-500' : e.emotionalTag === 'sad' ? 'text-red-500' : e.emotionalTag === 'proud' ? 'text-amber-500' : 'text-stone-400';
+                return (
+                  <div key={e.id} className="relative flex items-start gap-4 px-5 py-4 pl-16">
+                    <div className="absolute left-6 top-4 rounded-full bg-white p-1">
+                      <Icon className={cn('h-4 w-4', emotionColor)} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-stone-900">{e.title}</p>
+                        {e.emotionalTag && (
+                          <span className={cn('text-xs', emotionColor)}>
+                            {e.emotionalTag === 'happy' ? '😊' : e.emotionalTag === 'sad' ? '😢' : e.emotionalTag === 'proud' ? '🏆' : '📌'}
+                          </span>
+                        )}
+                      </div>
+                      {e.description && <p className="mt-0.5 text-sm text-stone-500">{e.description}</p>}
+                      <div className="mt-1 flex items-center gap-3 text-xs text-stone-400">
+                        <span>{new Date(e.eventDate).toLocaleDateString('zh-CN')}</span>
+                        {e.location && <span>📍 {e.location}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

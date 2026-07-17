@@ -257,30 +257,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo Accounts */}
-          <div className="mt-6 pt-6 border-t border-stone-200">
-            <p className="text-sm text-stone-500 text-center mb-3">演示账号</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setFormData(prev => ({ ...prev, phoneNumber: '13800000002', password: '123456' }));
-                }}
-                className="py-2 px-3 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-700 hover:bg-stone-100"
-              >
-                家属账号
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFormData(prev => ({ ...prev, phoneNumber: '13800000001', password: '123456' }));
-                }}
-                className="py-2 px-3 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-700 hover:bg-stone-100"
-              >
-                老人账号
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

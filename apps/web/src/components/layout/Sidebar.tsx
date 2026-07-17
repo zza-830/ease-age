@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Video,
+  Mic,
   ShoppingBag,
   BookOpen,
   Heart,
@@ -16,7 +16,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 
 const navigation = [
   { name: '首页', href: '/', icon: LayoutDashboard },
-  { name: '视频通讯', href: '/video-chat', icon: Video },
+  { name: '与AI通话', href: '/video-chat', icon: Mic },
   { name: '增值服务', href: '/services', icon: ShoppingBag },
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '健康管理', href: '/health', icon: Heart },
@@ -70,24 +70,21 @@ export default function Sidebar() {
 
       {/* User section */}
       <div className="border-t p-4">
-        <div className="flex items-center">
-          <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-            <span className="text-orange-600 font-medium">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-orange-100 flex items-center justify-center">
+            <span className="text-sm font-medium text-orange-600">
               {user?.fullName?.[0] || '用'}
             </span>
           </div>
-          <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-stone-900">{user?.fullName || '用户'}</p>
-            <p className="text-xs text-stone-500">
-              {user?.role === 'elderly' ? '老人' : user?.role === 'family' ? '家属' : '服务人员'}
-            </p>
-          </div>
+          <span className="flex-1 text-sm font-medium text-stone-700 truncate">
+            {user?.fullName || '用户'}
+          </span>
           <button
             onClick={handleLogout}
             className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
             title="退出登录"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
