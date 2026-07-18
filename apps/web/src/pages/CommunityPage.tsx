@@ -1,372 +1,188 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Calendar,
-  Users,
-  MapPin,
-  Clock,
-  ChevronRight,
-  Plus,
-  Heart,
-  HeartHandshake,
-  Megaphone,
-  PartyPopper,
-  BookOpen,
-  Activity
+  MessageSquare, Heart, Eye, Plus, Search,
+  Calendar, HelpCircle, Share2, Megaphone, Pin, Send,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/useAuthStore';
 
-interface Announcement {
+const POST_TYPES: Record<string, { icon: any; color: string; label: string }> = {
+  activity: { icon: Calendar, color: 'text-blue-500', label: '社区活动' },
+  help: { icon: HelpCircle, color: 'text-amber-500', label: '邻里互助' },
+  share: { icon: Share2, color: 'text-green-500', label: '生活分享' },
+  notice: { icon: Megaphone, color: 'text-red-500', label: '社区公告' },
+};
+
+interface Post {
   id: string;
+  postType: string;
   title: string;
   content: string;
-  category: 'general' | 'health' | 'event' | 'emergency';
-  publishDate: string;
+  viewCount: number;
+  likeCount: number;
   isPinned: boolean;
+  createdAt: string;
+  author: { id: string; fullName: string; avatarUrl: string | null };
+  _count?: { comments: number };
 }
-
-interface CommunityEvent {
-  id: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  location: string;
-  category: 'social' | 'health' | 'education' | 'exercise';
-  attendeeCount: number;
-  maxAttendees: number;
-  isRegistered: boolean;
-}
-
-interface NeighborRequest {
-  id: string;
-  requesterName: string;
-  requesterAvatar: string;
-  type: 'help_needed' | 'help_offered';
-  category: 'shopping' | 'medical' | 'transport' | 'companionship' | 'other';
-  description: string;
-  location: string;
-  postedAt: string;
-  status: 'open' | 'matched' | 'completed';
-}
-
-const mockAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    title: '社区健康讲座通知',
-    content: '本周六上午9点，社区将举办老年人健康养生讲座，欢迎参加。',
-    category: 'health',
-    publishDate: '2026-06-05',
-    isPinned: true,
-  },
-  {
-    id: '2',
-    title: '小区电梯维修公告',
-    content: '6月10日-12日，3栋电梯将进行例行维修保养，请提前安排出行。',
-    category: 'general',
-    publishDate: '2026-06-04',
-    isPinned: false,
-  },
-  {
-    id: '3',
-    title: '端午节社区活动',
-    content: '端午节当天，社区活动中心将举办包粽子活动，欢迎老人和家属参加。',
-    category: 'event',
-    publishDate: '2026-06-03',
-    isPinned: false,
-  },
-];
-
-const mockEvents: CommunityEvent[] = [
-  {
-    id: '1',
-    title: '太极拳晨练',
-    description: '每天早上7点，社区广场太极拳教学',
-    date: '2026-06-06',
-    time: '07:00',
-    location: '社区广场',
-    category: 'exercise',
-    attendeeCount: 15,
-    maxAttendees: 30,
-    isRegistered: true,
-  },
-  {
-    id: '2',
-    title: '健康体检活动',
-    description: '免费血压、血糖检测',
-    date: '2026-06-08',
-    time: '09:00',
-    location: '社区卫生站',
-    category: 'health',
-    attendeeCount: 28,
-    maxAttendees: 50,
-    isRegistered: false,
-  },
-  {
-    id: '3',
-    title: '书法兴趣班',
-    description: '每周三下午书法教学，欢迎初学者',
-    date: '2026-06-10',
-    time: '14:00',
-    location: '活动中心',
-    category: 'education',
-    attendeeCount: 8,
-    maxAttendees: 15,
-    isRegistered: false,
-  },
-  {
-    id: '4',
-    title: '邻里聚餐',
-    description: '每月一次的邻里聚餐活动',
-    date: '2026-06-15',
-    time: '18:00',
-    location: '社区食堂',
-    category: 'social',
-    attendeeCount: 42,
-    maxAttendees: 60,
-    isRegistered: true,
-  },
-];
-
-const mockNeighborRequests: NeighborRequest[] = [
-  {
-    id: '1',
-    requesterName: '李奶奶',
-    requesterAvatar: '李',
-    type: 'help_needed',
-    category: 'shopping',
-    description: '需要帮忙买菜，腿脚不方便',
-    location: '2栋3单元',
-    postedAt: '2小时前',
-    status: 'open',
-  },
-  {
-    id: '2',
-    requesterName: '王爷爷',
-    requesterAvatar: '王',
-    type: 'help_offered',
-    category: 'transport',
-    description: '可以顺路带人去医院',
-    location: '1栋1单元',
-    postedAt: '5小时前',
-    status: 'open',
-  },
-  {
-    id: '3',
-    requesterName: '张阿姨',
-    requesterAvatar: '张',
-    type: 'help_needed',
-    category: 'medical',
-    description: '需要帮忙取药',
-    location: '3栋2单元',
-    postedAt: '1天前',
-    status: 'matched',
-  },
-];
-
-const categoryColors = {
-  general: 'bg-blue-100 text-blue-800',
-  health: 'bg-green-100 text-green-800',
-  event: 'bg-purple-100 text-purple-800',
-  emergency: 'bg-red-100 text-red-800',
-};
-
-const categoryLabels = {
-  general: '通知',
-  health: '健康',
-  event: '活动',
-  emergency: '紧急',
-};
-
-const eventCategoryIcons = {
-  social: PartyPopper,
-  health: Heart,
-  education: BookOpen,
-  exercise: Activity,
-};
-
-const eventCategoryColors = {
-  social: 'bg-pink-50 text-pink-600',
-  health: 'bg-green-50 text-green-600',
-  education: 'bg-blue-50 text-blue-600',
-  exercise: 'bg-orange-50 text-orange-600',
-};
-
-const requestCategoryLabels = {
-  shopping: '代购',
-  medical: '医疗',
-  transport: '出行',
-  companionship: '陪伴',
-  other: '其他',
-};
 
 export default function CommunityPage() {
-  const [activeTab, setActiveTab] = useState<'announcements' | 'events' | 'neighbors' | 'providers'>('announcements');
+  const { user } = useAuthStore();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNewPost, setShowNewPost] = useState(false);
+  const [newPost, setNewPost] = useState({ title: '', content: '', postType: 'share' });
+
+  useEffect(() => {
+    fetchPosts();
+  }, [selectedType]);
+
+  const fetchPosts = async () => {
+    try {
+      setIsLoading(true);
+      const params = new URLSearchParams();
+      if (selectedType) params.append('postType', selectedType);
+      const res = await api.get<{ data: { posts: Post[] } }>(`/community/posts?${params}`)
+        .catch(() => ({ data: { posts: [] } }));
+      setPosts(res.data?.posts || []);
+    } catch (err) {
+      console.error('获取帖子失败:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLike = async (postId: string) => {
+    try {
+      await api.post(`/community/posts/${postId}/like`, {});
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, likeCount: p.likeCount + 1 } : p))
+      );
+    } catch {}
+  };
+
+  const handleCreatePost = async () => {
+    if (!newPost.title.trim() || !newPost.content.trim()) return;
+    try {
+      await api.post('/community/posts', newPost);
+      setShowNewPost(false);
+      setNewPost({ title: '', content: '', postType: 'share' });
+      fetchPosts();
+    } catch {}
+  };
+
+  const filteredPosts = posts.filter(
+    (p) => !searchQuery || p.title.includes(searchQuery) || p.content.includes(searchQuery)
+  );
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-stone-900">社区服务</h2>
-        <p className="text-stone-500">社区公告、活动和邻里互助</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-stone-900">社区服务</h2>
+          <p className="text-stone-500">邻里互助，温暖社区</p>
+        </div>
+        <button
+          onClick={() => setShowNewPost(true)}
+          className="flex items-center gap-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+        >
+          <Plus className="h-4 w-4" />
+          发帖
+        </button>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-stone-500">社区公告</p>
-              <p className="text-2xl font-bold text-blue-600">{mockAnnouncements.length}</p>
-            </div>
-            <div className="rounded-lg bg-blue-50 p-3">
-              <Megaphone className="h-5 w-5 text-blue-500" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-stone-500">近期活动</p>
-              <p className="text-2xl font-bold text-purple-600">{mockEvents.length}</p>
-            </div>
-            <div className="rounded-lg bg-purple-50 p-3">
-              <Calendar className="h-5 w-5 text-purple-500" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-stone-500">互助请求</p>
-              <p className="text-2xl font-bold text-orange-600">{mockNeighborRequests.filter(r => r.status === 'open').length}</p>
-            </div>
-            <div className="rounded-lg bg-orange-50 p-3">
-              <HeartHandshake className="h-5 w-5 text-orange-500" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-stone-500">活跃邻居</p>
-              <p className="text-2xl font-bold text-green-600">128</p>
-            </div>
-            <div className="rounded-lg bg-green-50 p-3">
-              <Users className="h-5 w-5 text-green-500" />
-            </div>
-          </div>
-        </div>
+      {/* 搜索 */}
+      <div className="relative max-w-lg">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+        <input
+          type="text"
+          placeholder="搜索帖子..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-lg border border-stone-200 pl-10 pr-4 py-2.5 text-sm focus:border-orange-300 focus:outline-none"
+        />
       </div>
 
-      {/* Tabs */}
-      <div className="border-b">
-        <nav className="flex space-x-8">
-          {[
-            { id: 'announcements', label: '社区公告', icon: Megaphone },
-            { id: 'events', label: '活动日历', icon: Calendar },
-            { id: 'neighbors', label: '邻里互助', icon: HeartHandshake },
-            { id: 'providers', label: '服务人员', icon: Users },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center border-b-2 px-1 py-4 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-700'
-              }`}
-            >
-              <tab.icon className="mr-2 h-4 w-4" />
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* 类型筛选 */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSelectedType(null)}
+          className={cn(
+            'rounded-full px-4 py-2 text-sm font-medium',
+            !selectedType ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+          )}
+        >
+          全部
+        </button>
+        {Object.entries(POST_TYPES).map(([type, config]) => (
+          <button
+            key={type}
+            onClick={() => setSelectedType(selectedType === type ? null : type)}
+            className={cn(
+              'rounded-full px-4 py-2 text-sm font-medium',
+              selectedType === type ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+            )}
+          >
+            {config.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'announcements' && (
-        <div className="space-y-4">
-          {mockAnnouncements.map((announcement) => (
-            <div key={announcement.id} className={`rounded-xl border bg-white p-4 shadow-sm ${
-              announcement.isPinned ? 'border-orange-200 bg-orange-50/30' : ''
-            }`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    {announcement.isPinned && (
-                      <span className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-medium text-white">
-                        置顶
-                      </span>
-                    )}
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${categoryColors[announcement.category]}`}>
-                      {categoryLabels[announcement.category]}
+      {/* 帖子列表 */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+        </div>
+      ) : filteredPosts.length === 0 ? (
+        <div className="text-center py-12">
+          <MessageSquare className="mx-auto h-12 w-12 text-stone-300" />
+          <p className="mt-4 text-stone-500">暂无帖子</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredPosts.map((post) => {
+            const typeConfig = POST_TYPES[post.postType] || POST_TYPES.share;
+            return (
+              <div key={post.id} className="rounded-xl border bg-white p-5 hover:shadow-sm transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-medium text-orange-600">
+                      {post.author.fullName[0]}
                     </span>
                   </div>
-                  <h3 className="mt-2 text-lg font-medium text-stone-900">{announcement.title}</h3>
-                  <p className="mt-1 text-sm text-stone-600">{announcement.content}</p>
-                  <p className="mt-2 text-xs text-stone-500">发布于 {announcement.publishDate}</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-stone-400" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {activeTab === 'events' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button className="flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">
-              <Plus className="mr-2 h-4 w-4" />
-              发布活动
-            </button>
-          </div>
-          {mockEvents.map((event) => {
-            const EventIcon = eventCategoryIcons[event.category];
-            return (
-              <div key={event.id} className="rounded-xl border bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div className={`rounded-lg p-3 ${eventCategoryColors[event.category]}`}>
-                      <EventIcon className="h-6 w-6" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {post.isPinned && <Pin className="h-3.5 w-3.5 text-orange-500" />}
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium bg-stone-50', typeConfig.color)}>
+                        {typeConfig.label}
+                      </span>
+                      <span className="text-xs text-stone-400">{post.author.fullName}</span>
+                      <span className="text-xs text-stone-400">
+                        {new Date(post.createdAt).toLocaleDateString('zh-CN')}
+                      </span>
                     </div>
-                    <div>
-                      <h3 className="font-medium text-stone-900">{event.title}</h3>
-                      <p className="mt-1 text-sm text-stone-600">{event.description}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-stone-500">
-                        <span className="flex items-center">
-                          <Calendar className="mr-1 h-3 w-3" />
-                          {event.date}
-                        </span>
-                        <span className="flex items-center">
-                          <Clock className="mr-1 h-3 w-3" />
-                          {event.time}
-                        </span>
-                        <span className="flex items-center">
-                          <MapPin className="mr-1 h-3 w-3" />
-                          {event.location}
-                        </span>
-                        <span className="flex items-center">
-                          <Users className="mr-1 h-3 w-3" />
-                          {event.attendeeCount}/{event.maxAttendees}人
-                        </span>
-                      </div>
+                    <h3 className="mt-2 font-semibold text-stone-900">{post.title}</h3>
+                    <p className="mt-1 text-sm text-stone-500 line-clamp-2">{post.content}</p>
+                    <div className="mt-3 flex items-center gap-4 text-xs text-stone-400">
+                      <button
+                        onClick={() => handleLike(post.id)}
+                        className="flex items-center gap-1 hover:text-red-500 transition-colors"
+                      >
+                        <Heart className="h-3.5 w-3.5" />
+                        {post.likeCount}
+                      </button>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {post._count?.comments || 0}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-3.5 w-3.5" />
+                        {post.viewCount}
+                      </span>
                     </div>
-                  </div>
-                  <button className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                    event.isRegistered
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-orange-500 text-white hover:bg-orange-600'
-                  }`}>
-                    {event.isRegistered ? '已报名' : '立即报名'}
-                  </button>
-                </div>
-                {/* Progress bar */}
-                <div className="mt-4">
-                  <div className="h-2 rounded-full bg-stone-100">
-                    <div
-                      className="h-2 rounded-full bg-orange-500"
-                      style={{ width: `${(event.attendeeCount / event.maxAttendees) * 100}%` }}
-                    />
                   </div>
                 </div>
               </div>
@@ -375,105 +191,68 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {activeTab === 'neighbors' && (
-        <div className="space-y-4">
-          <div className="flex justify-between">
-            <div className="flex space-x-2">
-              <button className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white">
-                全部
-              </button>
-              <button className="rounded-lg border px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
-                需要帮助
-              </button>
-              <button className="rounded-lg border px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
-                提供帮助
-              </button>
-            </div>
-            <button className="flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">
-              <Plus className="mr-2 h-4 w-4" />
-              发布请求
-            </button>
-          </div>
-          {mockNeighborRequests.map((request) => (
-            <div key={request.id} className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="flex items-start space-x-4">
-                <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                  <span className="text-lg font-medium text-orange-600">{request.requesterAvatar}</span>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-stone-900">{request.requesterName}</h4>
-                      <p className="text-xs text-stone-500">{request.location}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      request.type === 'help_needed' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {request.type === 'help_needed' ? '需要帮助' : '提供帮助'}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-stone-600">{request.description}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center space-x-4 text-xs text-stone-500">
-                      <span className="flex items-center">
-                        <HeartHandshake className="mr-1 h-3 w-3" />
-                        {requestCategoryLabels[request.category]}
-                      </span>
-                      <span className="flex items-center">
-                        <Clock className="mr-1 h-3 w-3" />
-                        {request.postedAt}
-                      </span>
-                    </div>
-                    <button className="rounded-lg bg-orange-50 px-4 py-1.5 text-sm font-medium text-orange-600 hover:bg-orange-100">
-                      {request.type === 'help_needed' ? '我来帮忙' : '请求帮助'}
+      {/* 发帖弹窗 */}
+      {showNewPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowNewPost(false)} />
+          <div className="relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-stone-900 mb-4">发布帖子</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">类型</label>
+                <div className="flex gap-2">
+                  {Object.entries(POST_TYPES).map(([type, config]) => (
+                    <button
+                      key={type}
+                      onClick={() => setNewPost((p) => ({ ...p, postType: type }))}
+                      className={cn(
+                        'rounded-lg px-3 py-1.5 text-sm',
+                        newPost.postType === type ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-700'
+                      )}
+                    >
+                      {config.label}
                     </button>
-                  </div>
+                  ))}
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">标题</label>
+                <input
+                  type="text"
+                  value={newPost.title}
+                  onChange={(e) => setNewPost((p) => ({ ...p, title: e.target.value }))}
+                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-orange-300 focus:outline-none"
+                  placeholder="输入标题..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">内容</label>
+                <textarea
+                  value={newPost.content}
+                  onChange={(e) => setNewPost((p) => ({ ...p, content: e.target.value }))}
+                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-orange-300 focus:outline-none"
+                  rows={4}
+                  placeholder="输入内容..."
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowNewPost(false)}
+                  className="rounded-lg border px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleCreatePost}
+                  disabled={!newPost.title.trim() || !newPost.content.trim()}
+                  className="flex items-center gap-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                  发布
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {activeTab === 'providers' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button className="flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">
-              <Plus className="mr-2 h-4 w-4" />
-              添加服务人员
-            </button>
           </div>
-          {[
-            { name: '陈护工', role: '专业护工', rating: 4.9, reviews: 156, phone: '138****8888', status: 'available' },
-            { name: '刘阿姨', role: '家政服务', rating: 4.8, reviews: 89, phone: '139****9999', status: 'busy' },
-            { name: '张师傅', role: '维修服务', rating: 4.7, reviews: 234, phone: '137****7777', status: 'available' },
-          ].map((provider, index) => (
-            <div key={index} className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <span className="text-lg font-medium text-blue-600">{provider.name[0]}</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-stone-900">{provider.name}</h4>
-                    <p className="text-sm text-stone-500">{provider.role}</p>
-                    <div className="mt-1 flex items-center space-x-2">
-                      <span className="text-xs text-yellow-600">★ {provider.rating}</span>
-                      <span className="text-xs text-stone-500">({provider.reviews}条评价)</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    provider.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {provider.status === 'available' ? '空闲中' : '服务中'}
-                  </span>
-                  <p className="mt-1 text-sm text-stone-500">{provider.phone}</p>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>

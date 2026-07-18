@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Mic,
+  Bell,
   ShoppingBag,
   BookOpen,
   Heart,
@@ -17,6 +18,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 const navigation = [
   { name: '首页', href: '/', icon: LayoutDashboard },
   { name: '与AI通话', href: '/video-chat', icon: Mic },
+  { name: '通知中心', href: '/notifications', icon: Bell },
   { name: '增值服务', href: '/services', icon: ShoppingBag },
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '健康管理', href: '/health', icon: Heart },

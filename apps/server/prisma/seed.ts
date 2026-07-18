@@ -21,6 +21,16 @@ async function main() {
 
   // 清理旧数据
   console.log('  🧹 Cleaning existing data...');
+  await prisma.communityComment.deleteMany();
+  await prisma.communityPost.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.healthAlert.deleteMany();
+  await prisma.medicationReminder.deleteMany();
+  await prisma.dailyCheckin.deleteMany();
+  await prisma.moodRecord.deleteMany();
+  await prisma.voiceMemo.deleteMany();
+  await prisma.emergencyContact.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.kgEdge.deleteMany();
   await prisma.kgNode.deleteMany();
   await prisma.dailyRoutine.deleteMany();
@@ -729,6 +739,130 @@ async function main() {
         createdAt: new Date(Date.now() - (30 - msg.time) * 60000),
       },
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  社区帖子
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('  📢 Creating community posts...');
+  const communityPosts = [
+    { authorId: staffUser.id, type: 'notice', title: '小区电梯维修通知', content: '各位业主：本周三（7月20日）上午9:00-12:00，3栋电梯将进行例行维护保养，请提前安排出行。给您带来不便，敬请谅解。', pinned: true },
+    { authorId: elderlyUser.id, type: 'share', title: '今天在公园拍的月季花', content: '和李阿姨一起去天河公园，月季花开得真好看！分享给大家看看。', pinned: false },
+    { authorId: familyUser2.id, type: 'activity', title: '周末社区象棋比赛', content: '本周六下午2点在社区活动中心举办象棋比赛，欢迎各位叔叔阿姨参加！有小礼品哦~', pinned: false },
+    { authorId: staffUser.id, type: 'notice', title: '夏季防暑温馨提示', content: '近日气温较高，请各位老人注意防暑降温：\n1. 避免中午11-15点外出\n2. 多喝水，少量多次\n3. 饮食清淡，多吃水果\n4. 如有不适请及时联系护工或拨打120', pinned: false },
+    { authorId: elderlyUser2.id, type: 'help', title: '谁家有梯子借用一下', content: '想换一下客厅的灯泡，家里的梯子坏了，哪位邻居方便借用一下？', pinned: false },
+    { authorId: familyUser1.id, type: 'share', title: '推荐一个好吃的营养餐', content: '给妈妈订了一周的营养餐，荤素搭配很合理，妈妈说味道也不错。推荐给有需要的家属们。', pinned: false },
+  ];
+
+  for (const post of communityPosts) {
+    const created = await prisma.communityPost.create({
+      data: {
+        authorId: post.authorId,
+        postType: post.type,
+        title: post.title,
+        content: post.content,
+        isPinned: post.pinned,
+        viewCount: Math.floor(Math.random() * 200) + 10,
+        likeCount: Math.floor(Math.random() * 30) + 1,
+      },
+    });
+    // 添加评论
+    if (post.type !== 'notice') {
+      await prisma.communityComment.create({
+        data: {
+          postId: created.id,
+          authorId: elderlyUser.id,
+          content: '好的，谢谢分享！',
+        },
+      }).catch(() => {});
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  通知
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('  🔔 Creating notifications...');
+  const notifications = [
+    { userId: elderlyUser.id, type: 'health_alert', title: '血压偏高提醒', content: '您今日血压130/85mmHg，略高于正常范围，请注意休息并按时服药。', priority: 'high' },
+    { userId: elderlyUser.id, type: 'medication', title: '用药提醒', content: '该服用降压药了（苯磺酸氨氯地平片 5mg）。', priority: 'normal' },
+    { userId: elderlyUser.id, type: 'family', title: '张丽发来消息', content: '妈妈，这周末我带明轩来看您，想吃您包的饺子！', priority: 'normal' },
+    { userId: elderlyUser.id, type: 'service', title: '送餐服务已接单', content: '今日午餐（营养送餐）已由王师傅接单，预计11:30送达。', priority: 'normal' },
+    { userId: elderlyUser.id, type: 'system', title: '社区活动通知', content: '本周六下午2点社区活动中心举办象棋比赛，欢迎参加！', priority: 'low' },
+    { userId: familyUser1.id, type: 'health_alert', title: '母亲健康提醒', content: '张秀兰今日血压偏高（130/85mmHg），建议关注。', priority: 'high' },
+  ];
+
+  for (const noti of notifications) {
+    await prisma.notification.create({
+      data: {
+        userId: noti.userId,
+        notificationType: noti.type,
+        title: noti.title,
+        content: noti.content,
+        priority: noti.priority,
+      },
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  每日签到和情绪记录
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('  📝 Creating daily checkins and mood records...');
+  for (let i = 0; i < 14; i++) {
+    const date = daysAgo(i);
+    date.setHours(0, 0, 0, 0);
+    await prisma.dailyCheckin.create({
+      data: {
+        elderlyProfileId: elderlyProfile.id,
+        checkinDate: date,
+        moodScore: Math.floor(Math.random() * 2) + 4, // 4-5
+        sleepQuality: Math.floor(Math.random() * 2) + 3, // 3-4
+        appetiteLevel: Math.floor(Math.random() * 2) + 4, // 4-5
+        activityLevel: Math.floor(Math.random() * 2) + 3, // 3-4
+      },
+    }).catch(() => {});
+  }
+
+  const moods = ['happy', 'calm', 'happy', 'calm', 'happy', 'tired', 'happy'];
+  for (let i = 0; i < moods.length; i++) {
+    await prisma.moodRecord.create({
+      data: {
+        elderlyProfileId: elderlyProfile.id,
+        moodType: moods[i],
+        intensity: Math.floor(Math.random() * 2) + 3,
+        trigger: moods[i] === 'happy' ? '和家人聊天' : moods[i] === 'tired' ? '散步走远了' : '正常',
+      },
+    }).catch(() => {});
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  紧急联系人
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('  🚨 Creating emergency contacts...');
+  await prisma.emergencyContact.createMany({
+    data: [
+      { elderlyProfileId: elderlyProfile.id, contactName: '张伟', relationship: '儿子', phoneNumber: '13800000002', isPrimary: true },
+      { elderlyProfileId: elderlyProfile.id, contactName: '张丽', relationship: '女儿', phoneNumber: '13800000004', isPrimary: false },
+      { elderlyProfileId: elderlyProfile.id, contactName: '王秀英', relationship: '护工', phoneNumber: '13800000003', isPrimary: false },
+      { elderlyProfileId: elderlyProfile.id, contactName: '120急救', relationship: '急救', phoneNumber: '120', isPrimary: false },
+    ],
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  审计日志
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('  📋 Creating audit logs...');
+  const auditActions = [
+    { userId: elderlyUser.id, action: 'login', resource: 'user' },
+    { userId: elderlyUser.id, action: 'ai_chat', resource: 'voice' },
+    { userId: elderlyUser.id, action: 'create', resource: 'health' },
+    { userId: familyUser1.id, action: 'login', resource: 'user' },
+    { userId: familyUser1.id, action: 'create', resource: 'service' },
+    { userId: adminUser.id, action: 'login', resource: 'user' },
+  ];
+  for (const log of auditActions) {
+    await prisma.auditLog.create({
+      data: { ...log, detailJson: '{}' },
+    }).catch(() => {});
   }
 
   console.log('✅ Database seeded successfully!');

@@ -29,6 +29,9 @@ model User {
   calleeCalls           VideoCallRecord[] @relation("CalleeCalls")
   serviceOrders         ServiceOrder[]
   familyMemories        FamilyMemory[]    @relation("FamilyMemories")
+  notifications         Notification[]
+  communityPosts        CommunityPost[]
+  communityComments     CommunityComment[]
 }
 
 // ─── Elderly Profile ─────────────────────────────────────────────────────────
@@ -61,6 +64,12 @@ model ElderlyProfile {
   importantDates  ImportantDate[]
   aiConversationLogs AiConversationLog[]
   lifeEvents      LifeEvent[]
+  healthAlerts    HealthAlert[]
+  medicationReminders MedicationReminder[]
+  dailyCheckins   DailyCheckin[]
+  moodRecords     MoodRecord[]
+  voiceMemos      VoiceMemo[]
+  emergencyContacts EmergencyContact[]
 }
 
 // ─── Family Relation ─────────────────────────────────────────────────────────
@@ -117,6 +126,7 @@ model Medication {
 
   // Relations
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  reminders      MedicationReminder[]
 
   @@index([elderlyProfileId])
 }
@@ -443,4 +453,201 @@ model LifeEvent {
   elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
 
   @@index([elderlyProfileId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  通知与预警模块
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Notification {
+  id               String   @id @default(cuid())
+  userId           String
+  notificationType String   // health_alert | medication | system | family | service | emergency
+  title            String
+  content          String
+  priority         String   @default("normal") // low | normal | high | urgent
+  isRead           Boolean  @default(false)
+  actionUrl        String?
+  metadataJson     String   @default("{}")
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model HealthAlert {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  alertType        String   // blood_pressure_high | blood_sugar_high | heart_rate_abnormal | temperature_high | blood_oxygen_low
+  severity         String   // warning | critical
+  recordValue      String   // JSON: the triggering value
+  thresholdValue   String   // JSON: the threshold that was exceeded
+  message          String
+  isAcknowledged   Boolean  @default(false)
+  acknowledgedAt   DateTime?
+  acknowledgedBy   String?
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId, isAcknowledged])
+  @@index([createdAt])
+}
+
+model MedicationReminder {
+  id               String   @id @default(cuid())
+  medicationId     String
+  elderlyProfileId String
+  scheduledTime    DateTime
+  status           String   @default("pending") // pending | taken | missed | skipped
+  takenAt          DateTime?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  medication     Medication      @relation(fields: [medicationId], references: [id])
+  elderlyProfile ElderlyProfile  @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId, scheduledTime])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  审计日志模块
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String   // login | logout | create | update | delete | export | call | ai_chat
+  resource    String   // user | health | service | knowledge | etc.
+  resourceId  String?
+  detailJson  String   @default("{}")
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  社区模块
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model CommunityPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  postType    String   // activity | help | share | notice
+  title       String
+  content     String
+  imageUrls   String   @default("[]") // JSON array
+  tagsJson    String   @default("[]") // JSON array
+  viewCount   Int      @default(0)
+  likeCount   Int      @default(0)
+  isPinned    Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author   User             @relation(fields: [authorId], references: [id])
+  comments CommunityComment[]
+
+  @@index([authorId])
+  @@index([postType])
+  @@index([createdAt])
+}
+
+model CommunityComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  签到与情绪模块
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model DailyCheckin {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  checkinDate      DateTime
+  moodScore        Int?     // 1-5
+  sleepQuality     Int?     // 1-5
+  appetiteLevel    Int?     // 1-5
+  activityLevel    Int?     // 1-5
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([elderlyProfileId, checkinDate])
+  @@index([elderlyProfileId])
+}
+
+model MoodRecord {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  moodType         String   // happy | calm | anxious | sad | angry | tired | excited
+  intensity        Int      // 1-5
+  trigger          String?  // what caused this mood
+  notes            String?
+  recordedAt       DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId, recordedAt])
+}
+
+model VoiceMemo {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  title            String?
+  transcriptionText String
+  audioUrl         String?
+  durationSeconds  Int?
+  tagsJson         String   @default("[]")
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId])
+}
+
+model EmergencyContact {
+  id               String   @id @default(cuid())
+  elderlyProfileId String
+  contactName      String
+  relationship     String
+  phoneNumber      String
+  isPrimary        Boolean  @default(false)
+  canReceiveAlerts Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  elderlyProfile ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([elderlyProfileId])
+}
+
+model DataExport {
+  id               String   @id @default(cuid())
+  userId           String
+  exportType       String   // health_report | full_export | knowledge_graph
+  format           String   // json | csv | pdf
+  status           String   @default("pending") // pending | processing | completed | failed
+  fileUrl          String?
+  fileSizeBytes    Int?
+  requestedAt      DateTime @default(now())
+  completedAt      DateTime?
+
+  @@index([userId])
 }

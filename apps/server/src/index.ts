@@ -18,6 +18,10 @@ const healthRoutes = require('./routes/health.routes').default;
 const serviceRoutes = require('./routes/service.routes').default;
 const knowledgeRoutes = require('./routes/knowledge.routes').default;
 const knowledgeGraphRoutes = require('./routes/knowledge-graph.routes').default;
+const notificationRoutes = require('./routes/notification.routes').default;
+const communityRoutes = require('./routes/community.routes').default;
+const healthAnalyticsRoutes = require('./routes/health-analytics.routes').default;
+const auditLogRoutes = require('./routes/audit-log.routes').default;
 const { setupVoiceChat } = require('./services/voiceChat.service');
 
 const app = express();
@@ -55,6 +59,10 @@ app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/services', serviceRoutes);
 app.use('/api/v1/knowledge', knowledgeRoutes);
 app.use('/api/v1/kg', knowledgeGraphRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/community', communityRoutes);
+app.use('/api/v1/analytics', healthAnalyticsRoutes);
+app.use('/api/v1/audit-logs', auditLogRoutes);
 
 app.use(errorHandler);
 
