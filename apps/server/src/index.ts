@@ -22,6 +22,7 @@ const notificationRoutes = require('./routes/notification.routes').default;
 const communityRoutes = require('./routes/community.routes').default;
 const healthAnalyticsRoutes = require('./routes/health-analytics.routes').default;
 const auditLogRoutes = require('./routes/audit-log.routes').default;
+const settingsRoutes = require('./routes/settings.routes').default;
 const { setupVoiceChat } = require('./services/voiceChat.service');
 
 const app = express();
@@ -63,6 +64,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/analytics', healthAnalyticsRoutes);
 app.use('/api/v1/audit-logs', auditLogRoutes);
+app.use('/api/v1/settings', settingsRoutes);
 
 app.use(errorHandler);
 
