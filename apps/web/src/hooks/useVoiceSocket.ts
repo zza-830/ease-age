@@ -10,31 +10,17 @@ export function useVoiceSocket() {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!accessToken) {
-      console.log('[VoiceSocket] 无 token，跳过连接');
-      return;
-    }
+    if (!accessToken) return;
 
     const wsUrl = import.meta.env.VITE_WS_URL || 'http://localhost:4000';
-    console.log('[VoiceSocket] 连接到:', wsUrl);
-
     const socket = io(wsUrl, {
       auth: { token: accessToken },
       transports: ['polling', 'websocket'],
     });
 
-    socket.on('connect', () => {
-      console.log('[VoiceSocket] 已连接, id:', socket.id);
-      setIsConnected(true);
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('[VoiceSocket] 连接错误:', err.message);
-      setIsConnected(false);
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('[VoiceSocket] 已断开:', reason);
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('connect_error', () => setIsConnected(false));
+    socket.on('disconnect', () => {
       setIsConnected(false);
       store.setStatus('idle');
     });
@@ -57,8 +43,21 @@ export function useVoiceSocket() {
       store.setStatus(data.status);
     });
 
-    socket.on('ai:reply', (data: { text: string }) => {
-      store.addMessage({ role: 'assistant', text: data.text });
+    // 流式文字 chunk
+    socket.on('ai:stream', (data: { chunk: string; done: boolean }) => {
+      if (!data.done) {
+        store.appendStreamChunk(data.chunk);
+      }
+    });
+
+    // 回复开始（清空流式缓冲）
+    socket.on('ai:reply_start', () => {
+      useVoiceChatStore.setState({ streamingText: '' });
+    });
+
+    // 回复完成（最终文本）
+    socket.on('ai:reply', () => {
+      store.finishStream();
     });
 
     socket.on('ai:audio', (data: { audio: string; format: string }) => {
@@ -69,55 +68,19 @@ export function useVoiceSocket() {
       store.setStatus('listening');
     });
 
-    socket.on('session:ended', () => {
-      store.setStatus('idle');
-    });
-
-    socket.on('error:asr', (data: { message: string }) => {
-      console.error('[VoiceSocket] ASR 错误:', data.message);
-      store.setStatus('listening');
-    });
-
-    socket.on('error:process', (data: { message: string }) => {
-      console.error('[VoiceSocket] 处理错误:', data.message);
-      store.setStatus('listening');
-    });
+    socket.on('session:ended', () => store.setStatus('idle'));
+    socket.on('error:asr', () => store.setStatus('listening'));
+    socket.on('error:process', () => store.setStatus('listening'));
 
     socketRef.current = socket;
-
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-    };
+    return () => { socket.disconnect(); socketRef.current = null; };
   }, [accessToken]);
 
-  const startSession = useCallback(() => {
-    socketRef.current?.emit('voice:start');
-  }, []);
+  const startSession = useCallback(() => socketRef.current?.emit('voice:start'), []);
+  const sendAudio = useCallback((base64: string) => socketRef.current?.emit('voice:audio', base64), []);
+  const stopAndProcess = useCallback(() => socketRef.current?.emit('voice:stop'), []);
+  const sendText = useCallback((text: string) => socketRef.current?.emit('voice:text', { text }), []);
+  const endSession = useCallback(() => { socketRef.current?.emit('session:end'); store.reset(); }, []);
 
-  const sendAudio = useCallback((base64: string) => {
-    socketRef.current?.emit('voice:audio', base64);
-  }, []);
-
-  const stopAndProcess = useCallback(() => {
-    socketRef.current?.emit('voice:stop');
-  }, []);
-
-  const sendText = useCallback((text: string) => {
-    socketRef.current?.emit('voice:text', { text });
-  }, []);
-
-  const endSession = useCallback(() => {
-    socketRef.current?.emit('session:end');
-    store.reset();
-  }, []);
-
-  return {
-    startSession,
-    sendAudio,
-    stopAndProcess,
-    sendText,
-    endSession,
-    isConnected,
-  };
+  return { startSession, sendAudio, stopAndProcess, sendText, endSession, isConnected };
 }

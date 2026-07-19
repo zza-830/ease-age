@@ -6,7 +6,7 @@ interface VoiceSession {
   userId: string;
   elderlyProfileId: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  audioChunks: string[]; // base64 WAV chunks
+  audioChunks: string[];
   isProcessing: boolean;
 }
 
@@ -20,24 +20,59 @@ async function getElderlyProfileId(userId: string): Promise<string> {
   return profile?.id || '';
 }
 
+// 流式发送文字（模拟打字效果）
+async function streamText(socket: Socket, text: string, chunkSize = 3, delayMs = 30) {
+  for (let i = 0; i < text.length; i += chunkSize) {
+    const chunk = text.substring(i, i + chunkSize);
+    socket.emit('ai:stream', { chunk, done: false });
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  socket.emit('ai:stream', { chunk: '', done: true });
+}
+
+// 核心处理流程
+async function processVoiceInput(socket: Socket, session: VoiceSession, userText: string) {
+  // 用户文本
+  socket.emit('voice:transcript', { text: userText, isFinal: true });
+  session.messages.push({ role: 'user', content: userText });
+
+  // LLM 生成回复
+  socket.emit('ai:status', { status: 'thinking' });
+  const aiReply = await chatCompletion(session.messages, session.elderlyProfileId);
+  session.messages.push({ role: 'assistant', content: aiReply });
+
+  // 流式发送文字
+  socket.emit('ai:reply_start');
+  await streamText(socket, aiReply);
+  socket.emit('ai:reply', { text: aiReply });
+
+  // TTS 合成语音
+  socket.emit('ai:status', { status: 'speaking' });
+  try {
+    const ttsAudio = await synthesizeSpeech(aiReply, '冰糖');
+    if (ttsAudio) {
+      socket.emit('ai:audio', { audio: ttsAudio, format: 'wav' });
+    }
+  } catch (err) {
+    console.error('[VoiceChat] TTS 错误:', err);
+  }
+
+  socket.emit('ai:done');
+  socket.emit('ai:status', { status: 'listening' });
+}
+
 export function setupVoiceChat(io: Server) {
-  // 认证中间件
   const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
-    console.log(`[VoiceChat] 认证请求, token: ${token ? token.substring(0, 20) + '...' : '无'}`);
-    if (!token) {
-      console.log('[VoiceChat] 拒绝: 无token');
-      return next(new Error('未提供认证令牌'));
-    }
+    if (!token) return next(new Error('未提供认证令牌'));
     try {
       const jwt = require('jsonwebtoken');
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       (socket as any).userId = decoded.userId || decoded.id;
-      console.log(`[VoiceChat] 认证成功: userId=${(socket as any).userId}`);
       next();
-    } catch (e: any) {
-      console.log(`[VoiceChat] 拒绝: JWT验证失败 - ${e.message}`);
+    } catch {
       next(new Error('认证失败'));
     }
   });
@@ -57,21 +92,19 @@ export function setupVoiceChat(io: Server) {
         isProcessing: false,
       });
       socket.emit('session:started');
-      console.log(`[VoiceChat] 用户 ${userId} 开始语音会话, profileId: ${elderlyProfileId}`);
     });
 
-    // 接收 base64 WAV 音频
+    // 接收音频
     socket.on('voice:audio', (base64Data: string) => {
       const session = sessions.get(socket.id);
       if (!session) return;
       session.audioChunks.push(base64Data);
     });
 
-    // 停止录音，处理 ASR + LLM + TTS
+    // 停止录音并处理
     socket.on('voice:stop', async () => {
       const session = sessions.get(socket.id);
       if (!session || session.isProcessing) return;
-
       session.isProcessing = true;
 
       try {
@@ -81,12 +114,10 @@ export function setupVoiceChat(io: Server) {
           return;
         }
 
-        // 合并所有 base64 chunks（取最后一个大的 chunk，前端已合并 PCM）
-        // 前端已将完整录音编码为单个 WAV blob，所以通常只有一个 chunk
         const audioBase64 = session.audioChunks.join('');
         session.audioChunks = [];
 
-        // ASR - 语音识别
+        // ASR
         socket.emit('ai:status', { status: 'transcribing' });
         let userText = '';
         try {
@@ -105,29 +136,7 @@ export function setupVoiceChat(io: Server) {
           return;
         }
 
-        socket.emit('voice:transcript', { text: userText, isFinal: true });
-        session.messages.push({ role: 'user', content: userText });
-
-        // LLM - 生成回复
-        socket.emit('ai:status', { status: 'thinking' });
-        const aiReply = await chatCompletion(session.messages, session.elderlyProfileId);
-        session.messages.push({ role: 'assistant', content: aiReply });
-
-        socket.emit('ai:reply', { text: aiReply });
-
-        // TTS - 语音合成
-        socket.emit('ai:status', { status: 'speaking' });
-        try {
-          const ttsAudio = await synthesizeSpeech(aiReply, '冰糖');
-          if (ttsAudio) {
-            socket.emit('ai:audio', { audio: ttsAudio, format: 'wav' });
-          }
-        } catch (err) {
-          console.error('[VoiceChat] TTS 错误:', err);
-        }
-
-        socket.emit('ai:done');
-        socket.emit('ai:status', { status: 'listening' });
+        await processVoiceInput(socket, session, userText);
       } catch (err) {
         console.error('[VoiceChat] 处理错误:', err);
         socket.emit('error:process', { message: '处理失败，请重试' });
@@ -136,12 +145,12 @@ export function setupVoiceChat(io: Server) {
       }
     });
 
-    // 直接发送文本（跳过 ASR）
+    // 文本输入
     socket.on('voice:text', async (data: { text: string }) => {
       const session = sessions.get(socket.id);
       if (!session || session.isProcessing) return;
-
       session.isProcessing = true;
+
       const userText = data.text.trim();
       if (!userText) {
         session.isProcessing = false;
@@ -149,27 +158,7 @@ export function setupVoiceChat(io: Server) {
       }
 
       try {
-        socket.emit('voice:transcript', { text: userText, isFinal: true });
-        session.messages.push({ role: 'user', content: userText });
-
-        socket.emit('ai:status', { status: 'thinking' });
-        const aiReply = await chatCompletion(session.messages, session.elderlyProfileId);
-        session.messages.push({ role: 'assistant', content: aiReply });
-
-        socket.emit('ai:reply', { text: aiReply });
-
-        socket.emit('ai:status', { status: 'speaking' });
-        try {
-          const ttsAudio = await synthesizeSpeech(aiReply, '冰糖');
-          if (ttsAudio) {
-            socket.emit('ai:audio', { audio: ttsAudio, format: 'wav' });
-          }
-        } catch (err) {
-          console.error('[VoiceChat] TTS 错误:', err);
-        }
-
-        socket.emit('ai:done');
-        socket.emit('ai:status', { status: 'listening' });
+        await processVoiceInput(socket, session, userText);
       } catch (err) {
         console.error('[VoiceChat] 处理错误:', err);
         socket.emit('error:process', { message: '处理失败，请重试' });
@@ -178,16 +167,13 @@ export function setupVoiceChat(io: Server) {
       }
     });
 
-    // 结束会话
     socket.on('session:end', () => {
       sessions.delete(socket.id);
       socket.emit('session:ended');
-      console.log(`[VoiceChat] 用户 ${userId} 结束语音会话`);
     });
 
     socket.on('disconnect', () => {
       sessions.delete(socket.id);
-      console.log(`[VoiceChat] 用户 ${userId} 断开连接`);
     });
   });
 }

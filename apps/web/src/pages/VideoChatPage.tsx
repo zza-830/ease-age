@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Phone, PhoneOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, Volume2, VolumeX, Video, VideoOff } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useVoiceSocket } from '@/hooks/useVoiceSocket';
@@ -59,43 +59,33 @@ function VoiceOrb({ status, audioLevel }: { status: VoiceStatus; audioLevel: num
           />
         )}
 
-        {status === 'speaking' && (
-          <>
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                className="absolute inset-0 rounded-full border border-emerald-400/30"
-                initial={{ scale: 1, opacity: 0.5 }}
-                animate={{ scale: 1.5 + i * 0.2, opacity: 0 }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4 }}
-              />
-            ))}
-          </>
-        )}
+        {status === 'speaking' && [0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="absolute inset-0 rounded-full border border-emerald-400/30"
+            initial={{ scale: 1, opacity: 0.5 }}
+            animate={{ scale: 1.5 + i * 0.2, opacity: 0 }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4 }}
+          />
+        ))}
 
         <div className="flex h-full items-center justify-center">
-          {status === 'idle' ? (
-            <Mic className="h-12 w-12 text-white/80" />
-          ) : status === 'listening' ? (
+          {status === 'idle' && <Mic className="h-12 w-12 text-white/80" />}
+          {status === 'listening' && (
             <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1, repeat: Infinity }}>
               <Mic className="h-12 w-12 text-white" />
             </motion.div>
-          ) : status === 'thinking' ? (
+          )}
+          {status === 'thinking' && (
             <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.5, repeat: Infinity }}>
               <div className="flex gap-1">
                 {[0, 1, 2].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="h-3 w-3 rounded-full bg-white"
-                    animate={{ y: [0, -8, 0] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                  />
+                  <motion.div key={i} className="h-3 w-3 rounded-full bg-white" animate={{ y: [0, -8, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} />
                 ))}
               </div>
             </motion.div>
-          ) : (
-            <Volume2 className="h-12 w-12 text-white" />
           )}
+          {status === 'speaking' && <Volume2 className="h-12 w-12 text-white" />}
         </div>
       </motion.div>
     </div>
@@ -106,14 +96,17 @@ export default function VideoChatPage() {
   const { isRecording, startRecording, stopRecording, audioLevel } = useAudioRecorder();
   const { playAudio, stopAudio } = useAudioPlayer();
   const { startSession, sendAudio, stopAndProcess, endSession, isConnected } = useVoiceSocket();
-  const { status, messages, currentTranscript, pendingAudio, isMuted, toggleMute } = useVoiceChatStore();
+  const { status, messages, currentTranscript, streamingText, pendingAudio, isMuted, toggleMute } = useVoiceChatStore();
 
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [videoEnabled, setVideoEnabled] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentTranscript]);
+  }, [messages, streamingText]);
 
   useEffect(() => {
     if (pendingAudio && !isMuted) {
@@ -122,12 +115,31 @@ export default function VideoChatPage() {
     }
   }, [pendingAudio, isMuted, playAudio]);
 
+  // 摄像头控制
+  const toggleVideo = async () => {
+    if (videoEnabled) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setVideoEnabled(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setVideoEnabled(true);
+      } catch {
+        alert('无法访问摄像头');
+      }
+    }
+  };
+
   const handleStart = async () => {
     if (!isConnected) { alert('正在连接服务器，请稍后再试'); return; }
     startSession();
     setIsSessionActive(true);
     try { await startRecording(); }
-    catch { alert('请允许麦克风权限以使用语音功能'); setIsSessionActive(false); }
+    catch { alert('请允许麦克风权限'); setIsSessionActive(false); }
   };
 
   const handleStopRecording = async () => {
@@ -148,9 +160,11 @@ export default function VideoChatPage() {
     stopAudio();
     endSession();
     setIsSessionActive(false);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setVideoEnabled(false);
   };
 
-  // 取最近的消息（最多显示最近6条）
   const recentMessages = messages.slice(-6);
 
   return (
@@ -176,6 +190,23 @@ export default function VideoChatPage() {
 
       {/* 主体 */}
       <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-gradient-to-b from-stone-50 to-white px-6">
+        {/* 视频区域 */}
+        {videoEnabled && (
+          <div className="relative w-full max-w-md">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full rounded-xl bg-stone-900 shadow-lg"
+              style={{ maxHeight: '200px', objectFit: 'cover' }}
+            />
+            <div className="absolute bottom-2 right-2 rounded bg-black/50 px-2 py-1 text-xs text-white">
+              我的画面
+            </div>
+          </div>
+        )}
+
         <VoiceOrb status={status} audioLevel={isRecording ? audioLevel : 0} />
 
         <AnimatePresence mode="wait">
@@ -190,39 +221,41 @@ export default function VideoChatPage() {
           </motion.p>
         </AnimatePresence>
 
-        {/* 对话消息 — 紧凑地显示在光球下方 */}
-        {(recentMessages.length > 0 || currentTranscript) && (
+        {/* 流式对话展示 */}
+        {(recentMessages.length > 0 || streamingText || currentTranscript) && (
           <div className="w-full max-w-xl space-y-2 mt-2">
             {recentMessages.map((msg, i) => (
               <motion.div
                 key={`${msg.timestamp}-${i}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'flex',
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                )}
+                className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
               >
-                <div
-                  className={cn(
-                    'max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed',
-                    msg.role === 'user'
-                      ? 'bg-orange-500 text-white rounded-br-md'
-                      : 'bg-stone-100 text-stone-800 rounded-bl-md'
-                  )}
-                >
+                <div className={cn(
+                  'max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed',
+                  msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-md' : 'bg-stone-100 text-stone-800 rounded-bl-md'
+                )}>
                   {msg.text}
                 </div>
               </motion.div>
             ))}
 
-            {/* 实时识别中的文本 */}
+            {/* 流式文字（打字效果） */}
+            {streamingText && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-stone-100 px-4 py-2 text-sm text-stone-800 leading-relaxed">
+                  {streamingText}
+                  <motion.span
+                    animate={{ opacity: [1, 0, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity }}
+                    className="inline-block w-0.5 h-4 bg-stone-400 ml-0.5 align-middle"
+                  />
+                </div>
+              </motion.div>
+            )}
+
             {currentTranscript && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex justify-end"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-end">
                 <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-50 px-4 py-2 text-sm text-blue-600">
                   {currentTranscript}...
                 </div>
@@ -249,10 +282,7 @@ export default function VideoChatPage() {
             <>
               <button
                 onClick={toggleMute}
-                className={cn(
-                  'rounded-full p-3.5 transition-colors',
-                  isMuted ? 'bg-red-100 text-red-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                )}
+                className={cn('rounded-full p-3.5 transition-colors', isMuted ? 'bg-red-100 text-red-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-200')}
               >
                 {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
@@ -262,12 +292,17 @@ export default function VideoChatPage() {
                 disabled={status === 'transcribing' || status === 'thinking' || status === 'speaking'}
                 className={cn(
                   'rounded-full p-5 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                  isRecording
-                    ? 'bg-red-500 text-white shadow-red-500/30 animate-pulse'
-                    : 'bg-orange-500 text-white shadow-orange-500/25 hover:bg-orange-600'
+                  isRecording ? 'bg-red-500 text-white shadow-red-500/30 animate-pulse' : 'bg-orange-500 text-white shadow-orange-500/25 hover:bg-orange-600'
                 )}
               >
                 {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+              </button>
+
+              <button
+                onClick={toggleVideo}
+                className={cn('rounded-full p-3.5 transition-colors', videoEnabled ? 'bg-blue-100 text-blue-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-200')}
+              >
+                {videoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
               </button>
 
               <button
